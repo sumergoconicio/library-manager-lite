@@ -1,0 +1,13 @@
+# requirements.txt
+# Sprint 7 — 2025-05-23: Audit confirmed all dependencies are present and pinned.
+#
+# Pin all dependencies (standard and third-party) for reproducibility and audit.
+# Python 3.10+ assumed.
+
+# Core dependencies
+pandas==2.2.2      # DataFrame/catalog handling
+PyMuPDF==1.22.5    # PDF processing
+tiktoken==0.5.1    # Token counting for TXT files
+
+# Testing
+pytest==8.2.0      # Unit testing

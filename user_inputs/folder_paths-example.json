@@ -1,0 +1,10 @@
+{
+    "_comment": "Example configuration file. Copy this to folder-paths.json and update the paths.",
+    "root_folder_path": "/path/to/your/pdfs",
+    "_catalog_comment": "Optional: defaults to '_catalog' if not specified",
+    "catalog_folder": "_catalog",
+    "_extract_path_comment": "Optional: defaults to 'textracted' if not specified",
+    "extract_path": "textracted",
+    "_excluded_files_comment": "Optional: defaults to [] if not specified",
+    "excluded_files": [".DS_Store", "Thumbs.db"]
+}
