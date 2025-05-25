@@ -106,10 +106,33 @@ From the project root:
 python main.py
 ```
 
+---
+
+### CLI Flag Stacking and Precedence (2025-05-25)
+
+- Only one main operation runs per invocation: `--identify`, `--catalog`, `--analysis`, or (default) incremental update.
+- Modifier flags (`--convert`, `--tokenize`, `--verbose`) stack and modify the main operation.
+- If multiple main-operation flags are passed, the first matched in priority order is executed: `--identify` > `--catalog` > `--analysis` > default.
+- Mutually exclusive flags are not enforced by argparse; user should avoid passing conflicting main-operation flags.
+
+#### Scenario Table
+
+| Scenario                         | Catalog Mode      | Extraction/Convert | Tokenize | Verbose | Notes                                 |
+|-----------------------------------|-------------------|--------------------|----------|---------|---------------------------------------|
+| (1) No flags                     | Incremental       | No                 | No       | No      | Only new files catalogued             |
+| (2) --catalog                    | Full rebuild      | No                 | No       | No      | Catalog replaced                      |
+| (3) --catalog --convert --tokenize| Full rebuild      | Yes                | Yes      | No      | All features active                   |
+| (4) --convert --verbose          | Incremental       | Yes                | No       | Yes     | Extraction + logging, no token count  |
+
+> **Note:** If you pass multiple main-operation flags (e.g., `--catalog --analysis`), only the first in priority order will run. Modifiers can be freely combined with any main operation.
+
+---
+
 - Scans all subfolders of `root_folder_path`
 - Catalogs every file (except system files, excluded files/folders, and .txt files in `textracted` folders) in a CSV
 - For each PDF, extracts text to the correct `textracted` folder
 - Updates the catalog with extraction status (flagged True if corresponding .txt exists in `textracted`)
+- Renames PDFs in `buffer_folder` using LLM (if `--identify` flag is used)
 
 ---
 

@@ -7,7 +7,9 @@ Non-Std Deps: None
 Abstract Spec: Given a .txt file path, return the estimated number of tokens using two heuristics and their average.
 """
 
-def count_tokens(txt_file_path: str) -> int:
+from core.log_utils import log_event
+
+def count_tokens(txt_file_path: str, verbose: bool = False) -> int:
     """
     Purpose: Estimate the number of tokens in a TXT file using model-agnostic heuristics.
     Inputs:
@@ -20,11 +22,13 @@ def count_tokens(txt_file_path: str) -> int:
         - est2: (len(text) / 4) * 0.75 (character count, ~25% overestimate)
         - Average of both as final token_count
     """
+    log_event(f"[INFO] Counting tokens in {txt_file_path}", verbose)
     with open(txt_file_path, "r", encoding="utf-8") as f:
         text = f.read()
     est1_token_count = len(text.split()) * 1.25
     est2_token_count = (len(text) / 4) * 0.75
     token_count = int((est1_token_count + est2_token_count) / 2)
+    log_event(f"[INFO] Token count for {txt_file_path}: {token_count}", verbose)
     return token_count
 
 if __name__ == "__main__":

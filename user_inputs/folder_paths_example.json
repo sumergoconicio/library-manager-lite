@@ -6,5 +6,7 @@
     "_extract_path_comment": "Optional: defaults to 'textracted' if not specified",
     "extract_path": "textracted",
     "_excluded_files_comment": "Optional: defaults to [] if not specified",
-    "excluded_files": [".DS_Store", "Thumbs.db"]
+    "excluded_files": [".DS_Store", "Thumbs.db"],
+    "_buffer_folder_comment": "Optional: defaults to '' if not specified",
+    "buffer_folder": ""
 }
