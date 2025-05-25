@@ -1,34 +1,36 @@
 """
 token_counter.py | TXT Token Counting Utility
-Purpose: Estimate token count for a .txt file using tiktoken
+Purpose: Estimate token count for a .txt file using model-agnostic heuristics
 Author: ChAI-Engine
-Last-Updated: 2025-05-23
-Non-Std Deps: tiktoken
-Abstract Spec: Given a .txt file path, return the number of tokens in the file using tiktoken's encoding.
+Last-Updated: 2025-05-24
+Non-Std Deps: None
+Abstract Spec: Given a .txt file path, return the estimated number of tokens using two heuristics and their average.
 """
 
-def count_tokens(txt_file_path: str, encoding_name: str = "cl100k_base") -> int:
+def count_tokens(txt_file_path: str) -> int:
     """
-    Purpose: Estimate the number of tokens in a TXT file using tiktoken.
+    Purpose: Estimate the number of tokens in a TXT file using model-agnostic heuristics.
     Inputs:
         txt_file_path (str): Path to the .txt file
-        encoding_name (str): Name of tiktoken encoding to use (default: cl100k_base)
     Outputs:
-        int: Token count
+        int: Estimated token count
     Role: Utility function for cataloguing and workflow modules.
+    Heuristics:
+        - est1: len(text.split()) * 1.25 (word count, ~30% underestimate)
+        - est2: (len(text) / 4) * 0.75 (character count, ~25% overestimate)
+        - Average of both as final token_count
     """
-    import tiktoken
     with open(txt_file_path, "r", encoding="utf-8") as f:
         text = f.read()
-    encoding = tiktoken.get_encoding(encoding_name)
-    tokens = encoding.encode(text)
-    return len(tokens)
+    est1_token_count = len(text.split()) * 1.25
+    est2_token_count = (len(text) / 4) * 0.75
+    token_count = int((est1_token_count + est2_token_count) / 2)
+    return token_count
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python token_counter.py <txt_file_path> [encoding_name]")
+        print("Usage: python token_counter.py <txt_file_path>")
         sys.exit(1)
     txt_file = sys.argv[1]
-    encoding = sys.argv[2] if len(sys.argv) > 2 else "cl100k_base"
-    print(count_tokens(txt_file, encoding))
+    print(count_tokens(txt_file))

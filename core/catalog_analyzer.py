@@ -1,18 +1,19 @@
 """
 catalog_analyzer.py | Catalog Analysis Module
-Purpose: Analyze catalog CSV for file/folder/extension/token statistics and output summary as latest-breakdown.txt (plain text).
+Purpose: Analyze catalog CSV for file/folder/extension/token statistics and output summary as CSV files.
 Author: ChAI-Engine (chaiji)
-Last-Updated: 2025-05-23
+Last-Updated: 2025-05-24
 Non-Std Deps: pandas
-Abstract Spec: Loads catalog CSV, computes summary statistics, outputs tables as plain text to latest-breakdown.txt.
+Abstract Spec: Loads catalog CSV, computes summary statistics (files per folder with totals, extensions with totals, textracted files, token counts), outputs tables as separate CSV files (latest-folder-breakdown.csv, latest-extension-breakdown.csv, latest-token-count.csv).
 """
 
-def analyze_catalog(output_mode="print"):
+def analyze_catalog(output_mode="csv"):
     """
-    Purpose: Analyze catalog CSV and output summary tables as plain text to latest-breakdown.txt.
-    Inputs: output_mode (str: 'print', 'return', or 'txt')
+    Purpose: Analyze catalog CSV and output summary tables as separate CSV files.
+    Inputs: output_mode (str: 'print', 'return', or 'csv')
     Outputs: None or dict of tables
-    Role: Loads config, resolves catalog path, computes file/folder/ext/token stats, writes summary to latest-breakdown.txt.
+    Role: Loads config, resolves catalog path, computes file/folder/ext/token stats with totals, counts textracted files, 
+          writes separate CSV files for folder breakdown, extension breakdown, and token count.
     """
     import pandas as pd
     import json
@@ -27,48 +28,79 @@ def analyze_catalog(output_mode="print"):
     if not root_folder:
         raise ValueError("root_folder_path must be set in user_inputs/folder_paths.json")
     catalog_path = Path(root_folder) / catalog_folder / "latest-catalog.csv"
-    breakdown_path = Path(root_folder) / catalog_folder / "latest-breakdown.txt"
+    
+    # Define paths for the separate CSV files
+    folder_breakdown_path = Path(root_folder) / catalog_folder / "latest-folder-breakdown.csv"
+    extension_breakdown_path = Path(root_folder) / catalog_folder / "latest-extension-breakdown.csv"
+    token_count_path = Path(root_folder) / catalog_folder / "latest-token-count.csv"
+    
     if not catalog_path.exists():
         raise FileNotFoundError(f"Catalog file not found: {catalog_path}")
     df = pd.read_csv(catalog_path)
     # Check required columns
-    required_cols = ["relative_path", "extension", "token_count"]
+    required_cols = ["relative_path", "extension"]
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise KeyError(f"Missing required columns in catalog: {missing}. Available columns: {list(df.columns)}")
     # Count total files per top-level folder
     df['top_folder'] = df['relative_path'].apply(lambda x: x.split('/')[0] if '/' in x else x)
     files_per_folder = df.groupby('top_folder').size().reset_index(name='file_count')
+    # Add total row to files_per_folder
+    total_files = files_per_folder['file_count'].sum()
+    files_per_folder.loc[len(files_per_folder)] = ['TOTAL', total_files]
+    
     # Count unique extension types
     ext_counts = df['extension'].value_counts().reset_index()
     ext_counts.columns = ['extension', 'file_count']
+    # Add total row to ext_counts
+    ext_counts.loc[len(ext_counts)] = ['TOTAL', total_files]
+    
+    # Count number of textracted files
+    textracted_count = df['textracted'].fillna(False).sum() if 'textracted' in df.columns else 0
+    
     # Count total token count
     token_total = df['token_count'].fillna(0).sum()
-    # Format output as plain text
+    # Create token count dataframe
+    token_count_df = pd.DataFrame({
+        'metric': ['textracted_files', 'total_tokens'],
+        'value': [int(textracted_count), int(token_total)]
+    })
+    
+    # Format output as plain text (for backward compatibility)
     summary_lines = []
     summary_lines.append("Total files per top-level folder:")
     summary_lines.append(files_per_folder.to_string(index=False))
     summary_lines.append("\nFile count by extension:")
     summary_lines.append(ext_counts.to_string(index=False))
-    summary_lines.append(f"\nTotal token count: {int(token_total)}")
+    summary_lines.append(f"\nNumber of textracted files: {int(textracted_count)}")
+    summary_lines.append(f"Total token count: {int(token_total)}")
     summary_txt = "\n".join(summary_lines)
-    # Always write to latest-breakdown.txt
-    with open(breakdown_path, "w", encoding="utf-8") as f:
-        f.write(summary_txt)
+    
+    # Save to CSV files
+    files_per_folder.to_csv(folder_breakdown_path, index=False)
+    ext_counts.to_csv(extension_breakdown_path, index=False)
+    token_count_df.to_csv(token_count_path, index=False)
+    
     if output_mode == "print":
         print(summary_txt)
     elif output_mode == "return":
         return {
             "files_per_folder": files_per_folder,
             "ext_counts": ext_counts,
+            "textracted_count": textracted_count,
             "token_total": token_total,
-            "summary_txt": summary_txt
+            "summary_txt": summary_txt,
+            "csv_paths": {
+                "folder_breakdown": str(folder_breakdown_path),
+                "extension_breakdown": str(extension_breakdown_path),
+                "token_count": str(token_count_path)
+            }
         }
-    # output_mode == 'txt' does not print or return, just writes file
+    # output_mode == 'csv' does not print or return, just writes files
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Analyze catalog CSV for summary statistics.")
-    parser.add_argument("--output_mode", default="print", help="Output mode: print (default) or return")
+    parser.add_argument("--output_mode", default="csv", help="Output mode: print, csv (default), or return")
     args = parser.parse_args()
     analyze_catalog(output_mode=args.output_mode)

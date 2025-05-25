@@ -1,11 +1,11 @@
 .env
-dev/
-sandbox/
+#dev/
+#sandbox/
 #core
 #adapters
 #ports
 user_inputs/folder_paths.json
-core/logs.txt
-core/__pycache__
+#core/logs.txt
+#core/__pycache__
 .windsurf
 .pytest_cache

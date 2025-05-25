@@ -7,7 +7,6 @@
 # Core dependencies
 pandas==2.2.2      # DataFrame/catalog handling
 PyMuPDF==1.22.5    # PDF processing
-tiktoken==0.5.1    # Token counting for TXT files
 
 # Testing
 pytest==8.2.0      # Unit testing
