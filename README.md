@@ -3,29 +3,34 @@
 **Bulk PDF Text Extraction & Cataloguing Tool**
 
 ## Overview
-Library Manager Lite is a modular, auditable tool for extracting text from PDFs, cataloguing files, counting tokens in TXT files, and analyzing file collections. Designed for reproducibility and compliance with project rules.
+Library Manager Lite is a modular, auditable tool for extracting text from PDFs, cataloguing files, counting tokens in TXT files, analyzing file collections, and downloading YouTube transcripts. Designed for reproducibility and compliance with project rules.
 
 ## Features
 - Bulk PDF text extraction (PyMuPDF)
 - Incremental cataloguing (CSV)
 - Token counting for TXT files (tiktoken)
 - MD to TXT conversion
+- VTT subtitle to TXT conversion
 - Exclusion logic via config
 - Unified logging with verbose mode
 - CLI flags for all major workflows
 - Catalog analysis with plain text output
+- YouTube transcript downloading with automatic VTT to TXT conversion
 
 ## Usage
 Run from the command line:
 
 ```sh
-python main.py [--catalog] [--analysis] [--verbose] [--tokenize]
+python main.py [--catalog] [--analysis] [--verbose] [--tokenize] [--identify] [--transcribe]
 ```
 
 - `--catalog`: Regenerate catalog from scratch
 - `--analysis`: Output summary analysis to latest-breakdown.txt
 - `--verbose`: Log every process iteration
 - `--tokenize`: Count tokens in TXT files and add to catalog
+- `--convert`: Convert PDFs to TXT, MD files to TXT, and VTT files to TXT
+- `--identify`: Rename PDFs in buffer_folder using LLM
+- `--transcribe`: Download transcripts from YouTube videos/playlists and automatically convert VTT to TXT
 
 ## Configuration
 Edit `user_inputs/folder-paths.json` to set:
@@ -33,6 +38,8 @@ Edit `user_inputs/folder-paths.json` to set:
 - `catalog_folder` (default: _catalog)
 - `extract_folder` (default: textracted)
 - `excluded_files` (list of files/folders to skip)
+- `buffer_folder` (folder containing PDFs to rename)
+- `yt_transcripts_folder` (folder to save YouTube transcripts)
 
 ## Outputs
 - `latest-catalog.csv`: Catalog of all files
@@ -43,7 +50,8 @@ Edit `user_inputs/folder-paths.json` to set:
 - Python 3.10+
 - pandas==2.2.2
 - PyMuPDF==1.22.5
-- tiktoken==0.5.1
+- litellm==1.27.6
+- yt-dlp==2023.11.16
 - pytest==8.2.0 (testing)
 
 ## Project Structure
@@ -66,6 +74,7 @@ _Compliant with all requirements as of Sprint 7 (2025-05-23)._
 - 📝 Maintains an up-to-date, auditable catalog for downstream workflows
 - 🧩 Modular, standards-driven Python codebase (Hexagonal Architecture)
 - ⚡ Fast, idempotent, and CLI-first (no interactive prompts)
+- 📺 Downloads transcripts from YouTube videos and playlists
 
 ---
 
@@ -85,6 +94,8 @@ pip install -r requirements.txt
   - `catalog_folder`: (optional) Subfolder for catalog CSV (default: `_catalog`)
   - `extract_path`: (optional) Name for extraction folders (default: `textracted`)
   - `excluded_files`: (optional) List of files or folders to skip during cataloging. Folders must end with `/` (e.g., `Web-Docs/`).
+  - `buffer_folder`: (optional) Folder containing PDFs to rename
+  - `yt_transcripts_folder`: (optional) Folder to save YouTube transcripts
 
 ### Example `folder_paths.json`
 ```json
@@ -92,7 +103,9 @@ pip install -r requirements.txt
   "root_folder_path": "/path/to/your/files",
   "catalog_folder": "_catalog",
   "extract_path": "textracted",
-  "excluded_files": ["Web-Docs/", "README.md"]
+  "excluded_files": ["Web-Docs/", "README.md"],
+  "buffer_folder": "/path/to/buffer",
+  "yt_transcripts_folder": "/path/to/transcripts"
 }
 ```
 
@@ -110,9 +123,9 @@ python main.py
 
 ### CLI Flag Stacking and Precedence (2025-05-25)
 
-- Only one main operation runs per invocation: `--identify`, `--catalog`, `--analysis`, or (default) incremental update.
+- Only one main operation runs per invocation: `--identify`, `--catalog`, `--analysis`, `--transcribe`, or (default) incremental update.
 - Modifier flags (`--convert`, `--tokenize`, `--verbose`) stack and modify the main operation.
-- If multiple main-operation flags are passed, the first matched in priority order is executed: `--identify` > `--catalog` > `--analysis` > default.
+- If multiple main-operation flags are passed, the first matched in priority order is executed: `--identify` > `--transcribe` > `--catalog` > `--analysis` > default.
 - Mutually exclusive flags are not enforced by argparse; user should avoid passing conflicting main-operation flags.
 
 #### Scenario Table
@@ -153,6 +166,24 @@ python main.py
 | 2024/images   | img1     | jpg       |            |
 
 - Extracted text: `your_root/2024/textracted/file1.txt`
+
+---
+
+## YouTube Transcript Downloading
+
+The `--transcribe` flag enables downloading transcripts from YouTube videos and playlists:
+
+```bash
+python main.py --transcribe
+```
+
+This will:
+1. Prompt for a YouTube video or playlist URL
+2. Optionally prompt for a subfolder name to organize transcripts
+3. Download all available transcripts to the configured `yt_transcripts_folder`
+4. Track downloaded videos in `catalog_folder/yt-transcribed.txt` to avoid duplicates
+
+Transcripts are saved in SRT format with filenames based on upload date and video title.
 
 ---
 

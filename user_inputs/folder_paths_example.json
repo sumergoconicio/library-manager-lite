@@ -8,5 +8,7 @@
     "_excluded_files_comment": "Optional: defaults to [] if not specified",
     "excluded_files": [".DS_Store", "Thumbs.db"],
     "_buffer_folder_comment": "Optional: defaults to '' if not specified",
-    "buffer_folder": ""
+    "buffer_folder": "",
+    "_yt_transcripts_folder_comment": "Optional: folder to store YouTube transcripts",
+    "yt_transcripts_folder": "YTtranscripts"
 }

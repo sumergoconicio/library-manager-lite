@@ -6,9 +6,9 @@
 
 # Core dependencies
 pandas==2.2.2      # DataFrame/catalog handling
-openai>=1.0.0
-anthropic>=0.25.0
+litellm==1.27.6
 PyMuPDF==1.22.5    # PDF processing
+yt-dlp==2023.11.16 # YouTube transcript downloading
 
 # Testing
 pytest==8.2.0      # Unit testing

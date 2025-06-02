@@ -2,7 +2,7 @@
 core/catalog_files.py | Catalog Management Module
 Purpose: Scan root folder for PDFs, update catalog CSV, trigger extraction as needed. (NEW: Count tokens in TXT files using tiktoken)
 Author: ChAI-Engine (chaiji)
-Last-Updated: 2025-05-23
+Last-Updated: 2025-06-02
 Non-Std Deps: pandas, tiktoken
 Abstract Spec: Loads config, manages catalog, triggers extraction for new PDFs, and counts tokens in TXT files.
 """
@@ -13,6 +13,7 @@ import pandas as pd
 import json
 from core.extract_text import extract_and_save
 from core.convertMDtoTXT import convert_md_to_txt
+from core.convertVTTtoTXT import extract_vtt_to_txt
 from core.file_utils import get_file_extension
 from core.token_counter import count_tokens
 
@@ -228,6 +229,7 @@ def scan_and_update_catalog(
                         converted_path = convert_md_to_txt(str(abs_file_path))
                         log_event(f"MD converted to TXT at {converted_path}", verbose)
                         record['textracted'] = True
+                        
                         # Count tokens if needed
                         if tokenize and txt_path.exists():
                             try:
@@ -245,6 +247,35 @@ def scan_and_update_catalog(
                 else:
                     # Skip conversion when convert flag is not set
                     log_event(f"MD conversion skipped (--convert not set): {abs_file_path}", verbose)
+                    record['textracted'] = False
+                    record['token_count'] = ''
+            elif extension.lower() == 'vtt':
+                # Handle VTT file conversion only if convert flag is set
+                txt_path = Path(dirpath) / (name + '.txt')
+                if convert:
+                    try:
+                        # Convert VTT to TXT
+                        converted_path = extract_vtt_to_txt(str(abs_file_path), verbose)
+                        log_event(f"VTT converted to TXT at {converted_path}", verbose)
+                        record['textracted'] = True
+                        
+                        # Count tokens if needed
+                        if tokenize and txt_path.exists():
+                            try:
+                                token_count = count_tokens(txt_path)
+                                record['token_count'] = token_count
+                            except Exception as e:
+                                log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
+                                record['token_count'] = ''
+                        else:
+                            record['token_count'] = ''
+                    except Exception as e:
+                        log_event(f"[ERROR] Exception during VTT conversion: {abs_file_path} | {e}", verbose)
+                        record['textracted'] = False
+                        record['token_count'] = ''
+                else:
+                    # Skip conversion when convert flag is not set
+                    log_event(f"VTT conversion skipped (--convert not set): {abs_file_path}", verbose)
                     record['textracted'] = False
                     record['token_count'] = ''
             else:
@@ -534,6 +565,38 @@ def scan_and_update_catalog(
                     # Skip conversion when convert flag is not set
                     from core.log_utils import log_event
                     log_event(f"MD conversion skipped (--convert not set): {abs_file_path}", verbose)
+                    record['textracted'] = False
+                    record['token_count'] = ''
+            elif extension.lower() == 'vtt':
+                # Handle VTT file conversion only if convert flag is set
+                txt_path = Path(dirpath) / (name + '.txt')
+                if convert:
+                    try:
+                        # Convert VTT to TXT
+                        converted_path = extract_vtt_to_txt(str(abs_file_path), verbose)
+                        from core.log_utils import log_event
+                        log_event(f"VTT converted to TXT at {converted_path}", verbose)
+                        record['textracted'] = True
+                        
+                        # Count tokens if needed
+                        if tokenize and txt_path.exists():
+                            try:
+                                token_count = count_tokens(txt_path)
+                                record['token_count'] = token_count
+                            except Exception as e:
+                                log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
+                                record['token_count'] = ''
+                        else:
+                            record['token_count'] = ''
+                    except Exception as e:
+                        from core.log_utils import log_event
+                        log_event(f"[ERROR] Exception during VTT conversion: {abs_file_path} | {e}", verbose)
+                        record['textracted'] = False
+                        record['token_count'] = ''
+                else:
+                    # Skip conversion when convert flag is not set
+                    from core.log_utils import log_event
+                    log_event(f"VTT conversion skipped (--convert not set): {abs_file_path}", verbose)
                     record['textracted'] = False
                     record['token_count'] = ''
             else:

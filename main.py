@@ -2,7 +2,7 @@
 main.py | Entry Point
 Purpose: Orchestrate config loading, catalog processing, and catalog analysis for Library Manager.
 Author: ChAI-Engine (chaiji)
-Last-Updated: 2025-05-25
+Last-Updated: 2025-06-02
 Non-Std Deps: pandas, PyMuPDF (fitz)
 Abstract Spec: Loads config, runs catalog and extraction workflow, or analyzes catalog per CLI flag.
 Provides robust help system that can handle future flags.
@@ -63,6 +63,8 @@ def display_help(parser):
     print("  python main.py --convert            # Extract text from PDFs and convert MD to TXT")
     print("  python main.py --verbose --tokenize # Run with verbose logging and token counting")
     print("  python main.py --convert --tokenize # Extract text and count tokens")
+    print("  python main.py --identify           # Rename PDFs in buffer folder using LLM")
+    print("  python main.py --transcribe         # Download transcripts from YouTube videos")
     print()
 
 def main():
@@ -75,6 +77,7 @@ def main():
         --tokenize: Enable token-counting in catalog_files.py
         --convert: Convert MD files to TXT and extract text from PDFs
         --identify: Run PDF renaming workflow on buffer_folder
+        --transcribe: Download transcripts from YouTube videos
         --help: Display this help message and exit
     Outputs: None
     Role: Loads config, runs incremental or full catalog workflow per CLI flags, passes flags to modules. 
@@ -90,6 +93,7 @@ def main():
     parser.add_argument("--tokenize", action="store_true", help="Enable token-counting in catalog_files.py")
     parser.add_argument("--convert", action="store_true", help="Convert MD files to TXT and extract text from PDFs")
     parser.add_argument("--identify", action="store_true", help="Run PDF renaming workflow on buffer_folder")
+    parser.add_argument("--transcribe", action="store_true", help="Download transcripts from YouTube videos")
     parser.add_argument("--help", "-h", action="store_true", help="Display this help message and exit")
 
     args = parser.parse_args()
@@ -113,6 +117,11 @@ def main():
         llm = get_llm_provider()
         process_pdf_directory(Path(buffer_folder), llm, prompt, n_pages=5, verbose=args.verbose)
 
+    def handle_transcribe():
+        from adapters.yt_transcriber import process_transcript_request
+        config = load_config("user_inputs/folder_paths.json", required_keys=["yt_transcripts_folder"])
+        process_transcript_request(config, verbose=args.verbose)
+
     def handle_incremental():
         config_path = Path("user_inputs/folder_paths.json")
         run_catalog_workflow(config_path, verbose=args.verbose, tokenize=args.tokenize, force_new=False, convert=args.convert)
@@ -125,6 +134,13 @@ def main():
     if args.identify:
         try:
             handle_identify()
+        except Exception as e:
+            print(str(e))
+            sys.exit(1)
+        sys.exit(0)
+    elif args.transcribe:
+        try:
+            handle_transcribe()
         except Exception as e:
             print(str(e))
             sys.exit(1)
