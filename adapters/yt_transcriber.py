@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, List
 import yt_dlp
 import glob
+from ports.transcript_archive import process_transcript_archive, extract_video_id
 
 def download_transcript(
     video_url: str, 
@@ -46,8 +47,14 @@ def download_transcript(
         # Format the output template
         output_template = str(full_output_path / "%(upload_date)s %(title)s.%(ext)s")
         
-        # Create download archive path
-        download_archive = str(catalog_folder / "yt-transcribed.txt")
+        # Create download archive path for yt-dlp internal use
+        download_archive = str(catalog_folder / "latest-transcript-archive.txt")
+        
+        # Print status message regardless of verbose mode
+        print(f"Using download archive: {download_archive}")
+        
+        # Ensure catalog folder exists
+        os.makedirs(catalog_folder, exist_ok=True)
         
         # Configure yt-dlp options
         ydl_opts = {
@@ -69,7 +76,42 @@ def download_transcript(
             
         # Use yt-dlp as a library
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
+            # Extract info first to get video IDs
+            info = ydl.extract_info(video_url, download=False)
+            
+            # Handle playlists
+            if info and 'entries' in info:
+                for entry in info['entries']:
+                    if entry:
+                        entry_id = entry.get('id')
+                        entry_url = f"https://www.youtube.com/watch?v={entry_id}"
+                        
+                        # Generate expected filename
+                        entry_title = entry.get('title', 'Unknown Title')
+                        entry_date = entry.get('upload_date', 'Unknown Date')
+                        expected_filename = f"{entry_date} {entry_title}.txt"
+                        
+                        # Check if transcript is already in archive
+                        if process_transcript_archive(entry_url, expected_filename, catalog_folder, verbose):
+                            # Download this specific video
+                            ydl.download([entry_url])
+                        else:
+                            print(f"Skipping {entry_title} - already in transcript archive")
+            # Handle single videos
+            else:
+                # Generate expected filename based on info if available
+                expected_filename = "Unknown.txt"
+                if info:
+                    video_title = info.get('title', 'Unknown Title')
+                    video_date = info.get('upload_date', 'Unknown Date')
+                    expected_filename = f"{video_date} {video_title}.txt"
+                
+                # Check if transcript is already in archive
+                if process_transcript_archive(video_url, expected_filename, catalog_folder, verbose):
+                    # Download the video transcript
+                    ydl.download([video_url])
+                else:
+                    print(f"Skipping {expected_filename} - already in transcript archive")
             
         if verbose:
             log_event(f"Successfully downloaded transcript to {full_output_path}", verbose)
@@ -77,10 +119,13 @@ def download_transcript(
         return True
         
     except Exception as e:
+        # Always print critical errors regardless of verbose mode
+        error_msg = f"Exception in download_transcript: {str(e)}"
+        print(error_msg)
         if verbose:
-            log_event(f"Exception in download_transcript: {str(e)}", verbose)
+            log_event(error_msg, verbose)
         return False
-        
+
 def convert_vtt_files(folder_path: Path, verbose: bool = False) -> List[str]:
     """
     Purpose: Convert all VTT files in a folder to TXT using convertVTTtoTXT.py

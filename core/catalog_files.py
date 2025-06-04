@@ -1,10 +1,10 @@
 """
 core/catalog_files.py | Catalog Management Module
-Purpose: Scan root folder for PDFs, update catalog CSV, trigger extraction as needed. (NEW: Count tokens in TXT files using tiktoken)
+Purpose: Scan root folder for PDFs and all files, update catalog CSV, trigger extraction as needed, and ensure robust PDF–TXT association. Catalogs and tokenizes all .txt files in any textracted folder. For each PDF, sets textracted=True if a matching .txt exists in any textracted folder under the same top-level directory. Adds last_modified and file_size_in_MB columns to catalog, with file_size_in_MB skipped for textracted files associated with PDF row-items. File size extraction now uses a single robust utility get_file_size_in_mb for all cases. file_size_in_MB values are always rounded to 3 decimal places for precision and consistency.
 Author: ChAI-Engine (chaiji)
-Last-Updated: 2025-06-02
+Last-Updated: 2025-06-03
 Non-Std Deps: pandas, tiktoken
-Abstract Spec: Loads config, manages catalog, triggers extraction for new PDFs, and counts tokens in TXT files.
+Abstract Spec: Recursively scan root, catalog all files except system/excluded files. Build a mapping of (top-level, basename) to .txt path for all .txt in textracted folders. For PDFs, set textracted=True if a matching .txt exists. Tokenize all .txt in textracted if tokenize flag is set. Ensure atomic, robust DataFrame updates. Docstrings and file header updated to reflect changes.
 """
 
 import os
@@ -16,6 +16,25 @@ from core.convertMDtoTXT import convert_md_to_txt
 from core.convertVTTtoTXT import extract_vtt_to_txt
 from core.file_utils import get_file_extension
 from core.token_counter import count_tokens
+from core.log_utils import log_event
+
+def get_file_size_in_mb(file_path: str) -> float:
+    """
+    Purpose: Extract the size of a file in MB, rounded to 3 decimal places.
+    Inputs:
+        file_path (str): Path to the file whose size we need to calculate.
+    Outputs:
+        file_size_in_mb (float): Size of the file in MB (returns 0.0 if file doesn't exist or error occurs). Value is always rounded to 3 decimal places.
+    Role: Robustly retrieves file size for cataloging. Centralizes error handling. Precision is enforced for catalog consistency.
+    """
+    import os
+    try:
+        if os.path.isfile(file_path):
+            return round(os.path.getsize(file_path) / (1024 * 1024), 3)
+        return 0.0
+    except Exception as e:
+        print(f"[ERROR] Error calculating file size for {file_path}: {e}")
+        return 0.0
 
 
 def load_config(config_path: Path) -> dict:
@@ -68,7 +87,7 @@ def load_or_init_catalog(root: Path, catalog_folder: str) -> pd.DataFrame:
     catalog_path = catalog_dir / 'latest-catalog.csv'
     if catalog_path.exists():
         return pd.read_csv(catalog_path)
-    cols = ['relative_path', 'filename', 'extension', 'textracted', 'token_count']
+    cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count']
     return pd.DataFrame(columns=cols)
 
 def get_first_level_subdir(root: Path, file_path: Path) -> Path:
@@ -90,206 +109,134 @@ EXCLUDED_FILES = {'.DS_Store', 'Thumbs.db', 'desktop.ini'}
 def scan_and_update_catalog(
     root: Path, extract_folder: str, catalog: pd.DataFrame, excluded_files: set = None, verbose: bool = False, tokenize: bool = False, convert: bool = False
 ) -> pd.DataFrame:
-    """
-    core/catalog_files.py | Unified Catalog & Extraction Routine
-    Purpose: Scan root recursively, catalog all files, extract text from PDFs (to textracted), convert MD to TXT, and update extraction/tokenization status.
-    Author: ChAI-Engine (chaiji)
-    Last-Updated: 2025-05-25
-    Non-Std Deps: pandas, tiktoken, PyMuPDF (fitz)
-    Abstract Spec: Only this implementation is active; legacy/duplicate code removed for audit clarity. See dev/project-intent.md.
-    
-    Purpose: Recursively scan root, catalog all files except system files and .txt files in textracted folders. For PDFs, if convert is True, extract text to the correct textracted folder. For MD files, if convert is True, convert to TXT in place. Update textracted/token_count status for catalog. Robust logging at start/end and for all key actions.
-    Inputs:
-        root (Path): Root directory to scan.
-        extract_folder (str): Name of the extraction folder (e.g., 'textracted').
-        catalog (pd.DataFrame): Existing catalog DataFrame.
-        excluded_files (set): Files/folders to exclude.
-        verbose (bool): Enable verbose logging.
-        tokenize (bool): If True, count tokens in TXT files.
-        convert (bool): If True, extract PDFs and convert MDs.
-    Outputs:
-        pd.DataFrame: Updated catalog DataFrame.
-    Role: Single source of truth for cataloging, extraction, and conversion. Idempotent and compliant with project rules.
-    """
     from core.log_utils import log_event
     log_event("[START] scan_and_update_catalog", verbose)
+
     if excluded_files is None:
         excluded_files = set()
     records = []
+
+    # --- Step 1: Build mapping of all .txt in any textracted folder ---
+    txt_mapping = {}  # (top_level, basename) -> txt_path
     for dirpath, dirs, files in os.walk(root):
-        # Skip textracted folders entirely for cataloging
         if os.path.basename(dirpath) == extract_folder:
-            continue
+            rel_parts = Path(os.path.relpath(dirpath, root)).parts
+            top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
+            for f in files:
+                name, ext = os.path.splitext(f)
+                if ext.lower() == '.txt':
+                    txt_mapping[(top_level, name)] = Path(dirpath) / f
+    log_event(f"[DEBUG] Built txt_mapping with {len(txt_mapping)} entries", verbose)
+
+    # --- Step 2: Main scan loop ---
+    for dirpath, dirs, files in os.walk(root):
+        log_event(f"[SCAN] Entering directory: {dirpath}", verbose)
         if extract_folder in dirs:
             dirs.remove(extract_folder)
         for f in files:
             abs_file_path = Path(dirpath) / f
+            log_event(f"[SCAN] Considering file: {abs_file_path} (ext: {os.path.splitext(f)[1]})", verbose)
+
             if f in EXCLUDED_FILES:
                 log_event(f"File skipped (excluded): {abs_file_path}", verbose)
                 continue
+
             if excluded_files and is_excluded(abs_file_path, excluded_files, root):
                 log_event(f"File skipped (excluded by config): {abs_file_path}", verbose)
                 continue
+
             name, ext = os.path.splitext(f)
             rel_dir = os.path.relpath(dirpath, root)
             extension = get_file_extension(f)
-            # Do not catalog .txt files in any textracted folder
-            if extension.lower() == 'txt' and extract_folder in Path(dirpath).parts:
-                log_event(f"File skipped (.txt in textracted): {abs_file_path}", verbose)
-                continue
+
+            # --- NEW: Catalog .txt files in textracted folders ---
+            in_textracted = extract_folder in Path(dirpath).parts
+            try:
+                last_modified = os.path.getmtime(abs_file_path)
+                last_modified_str = pd.to_datetime(last_modified, unit='s').strftime('%Y-%m-%d %H:%M:%S')
+            except Exception as e:
+                last_modified_str = ''
+                log_event(f"[ERROR] Could not get last_modified for {abs_file_path}: {e}", verbose)
+
+            # Calculate file_size_in_MB for all files by default
+            file_size_in_MB = get_file_size_in_mb(abs_file_path)
+
+            # If .txt in textracted and associated with a PDF row-item, set blank
+            if extension.lower() == 'txt' and in_textracted:
+                rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
+                top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
+                pdf_match = catalog[
+                    (catalog['relative_path'].str.split(os.sep).str[0] == top_level)
+                    & (catalog['filename'] == name)
+                    & (catalog['extension'].str.lower() == 'pdf')
+                ]
+                if not pdf_match.empty:
+                    file_size_in_MB = ''
+
             record = {
                 'relative_path': rel_dir,
                 'filename': name,
-                'extension': extension
+                'extension': extension,
+                'last_modified': last_modified_str,
+                'file_size_in_MB': file_size_in_MB,
+                'textracted': False,
+                'token_count': ''
             }
+
+            # --- PDF logic: set textracted if mapping exists ---
+            rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
+            top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
             if extension.lower() == 'pdf':
-                # Compute correct textracted folder
-                first_level = get_first_level_subdir(root, abs_file_path)
-                txt_dir = first_level / extract_folder
-                txt_path = txt_dir / (name + '.txt')
-                already_in_catalog = (
-                    (catalog['relative_path'] == rel_dir)
-                    & (catalog['filename'] == name)
-                    & (catalog['extension'] == ext.lstrip('.'))
-                )
-                skip_due_to_catalog = False
-                if already_in_catalog.any():
-                    # Already catalogued, check if extracted
-                    textracted = catalog.loc[already_in_catalog, 'textracted'].iloc[0]
-                    # Only skip if both catalog says extracted AND the .txt file actually exists
-                    if (textracted == True or textracted == 'True') and txt_path.exists():
-                        skip_due_to_catalog = True
-                if skip_due_to_catalog:
-                    log_event(f"File skipped (already extracted): {abs_file_path}", verbose)
+                if (top_level, name) in txt_mapping:
                     record['textracted'] = True
                     if tokenize:
-                        try:
-                            token_count = count_tokens(str(txt_path))
-                            record['token_count'] = token_count
-                            log_event(f"Token count for {txt_path}: {token_count}", verbose)
-                        except Exception as e:
-                            record['token_count'] = ''
-                            log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                    else:
-                        record['token_count'] = ''
-                    # Ensure textracted is last column
-                    record = {k: record[k] for k in ['relative_path', 'filename', 'extension']} | {'textracted': record['textracted'], 'token_count': record['token_count']}
-                    records.append(record)
-                    continue
-                # If txt file exists, mark as extracted - regardless of convert flag
-                if txt_path.exists():
-                    log_event(f"PDF already extracted: {txt_path}", verbose)
-                    textracted = True
-                    if tokenize:
-                        try:
-                            token_count = count_tokens(txt_path)
-                        except Exception as e:
-                            log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                            token_count = ''
-                    else:
-                        token_count = ''
-                else:
-                    # Try extraction only if convert flag is set
-                    if convert:
-                        try:
-                            txt_dir.mkdir(parents=True, exist_ok=True)
-                            # Extract text from PDF and save to txt file
-                            success = extract_and_save(abs_file_path, txt_path)
-                            if success:
-                                log_event(f"PDF extracted to {txt_path}", verbose)
-                                textracted = True
-                                if tokenize:
-                                    try:
-                                        token_count = count_tokens(txt_path)
-                                    except Exception as e:
-                                        log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                                        token_count = ''
-                                else:
-                                    token_count = ''
-                            else:
-                                textracted = False
-                                token_count = ''
-                        except Exception as e:
-                            log_event(f"[ERROR] Exception during PDF extraction: {txt_path} | {e}", verbose)
-                            textracted = False
-                            token_count = ''
-                    else:
-                        # Skip extraction when convert flag is not set
-                        log_event(f"PDF extraction skipped (--convert not set): {abs_file_path}", verbose)
-                        textracted = False
-                        token_count = ''
-                    record['textracted'] = textracted
-                record['token_count'] = token_count
-            elif extension.lower() == 'md':
-                # Handle MD file conversion only if convert flag is set
-                txt_path = Path(dirpath) / (name + '.txt')
-                if convert:
-                    try:
-                        # Convert MD to TXT
-                        converted_path = convert_md_to_txt(str(abs_file_path))
-                        log_event(f"MD converted to TXT at {converted_path}", verbose)
-                        record['textracted'] = True
-                        
-                        # Count tokens if needed
-                        if tokenize and txt_path.exists():
+                        txt_path = txt_mapping[(top_level, name)]
+                        log_event(f"[DEBUG] Counting tokens for PDF-associated TXT: {txt_path}", verbose)
+                        if txt_path.exists():
                             try:
-                                token_count = count_tokens(txt_path)
+                                token_count = count_tokens(str(txt_path))
                                 record['token_count'] = token_count
                             except Exception as e:
-                                log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
                                 record['token_count'] = ''
+                                log_event(f"[ERROR] Token counting failed for PDF-associated TXT {txt_path}: {e}", verbose)
                         else:
                             record['token_count'] = ''
-                    except Exception as e:
-                        log_event(f"[ERROR] Exception during MD conversion: {abs_file_path} | {e}", verbose)
-                        record['textracted'] = False
-                        record['token_count'] = ''
-                else:
-                    # Skip conversion when convert flag is not set
-                    log_event(f"MD conversion skipped (--convert not set): {abs_file_path}", verbose)
-                    record['textracted'] = False
-                    record['token_count'] = ''
-            elif extension.lower() == 'vtt':
-                # Handle VTT file conversion only if convert flag is set
-                txt_path = Path(dirpath) / (name + '.txt')
-                if convert:
+                            log_event(f"[ERROR] Associated TXT file does not exist: {txt_path}", verbose)
+
+            # --- TXT in textracted: always catalog, always tokenize if flag set ---
+            if extension.lower() == 'txt':
+                if tokenize:
+                    log_event(f"[DEBUG] About to count tokens for TXT: {abs_file_path}", verbose)
                     try:
-                        # Convert VTT to TXT
-                        converted_path = extract_vtt_to_txt(str(abs_file_path), verbose)
-                        log_event(f"VTT converted to TXT at {converted_path}", verbose)
-                        record['textracted'] = True
-                        
-                        # Count tokens if needed
-                        if tokenize and txt_path.exists():
-                            try:
-                                token_count = count_tokens(txt_path)
-                                record['token_count'] = token_count
-                            except Exception as e:
-                                log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                                record['token_count'] = ''
-                        else:
-                            record['token_count'] = ''
+                        token_count = count_tokens(str(abs_file_path))
+                        record['token_count'] = token_count
                     except Exception as e:
-                        log_event(f"[ERROR] Exception during VTT conversion: {abs_file_path} | {e}", verbose)
-                        record['textracted'] = False
                         record['token_count'] = ''
-                else:
-                    # Skip conversion when convert flag is not set
-                    log_event(f"VTT conversion skipped (--convert not set): {abs_file_path}", verbose)
-                    record['textracted'] = False
-                    record['token_count'] = ''
-            else:
-                record['textracted'] = False
-                record['token_count'] = ''
+                        log_event(f"[ERROR] Token counting failed for {abs_file_path}: {e}", verbose)
             records.append(record)
-    # Merge with old catalog, preferring new records
+
+    # --- Step 3: Build DataFrame and ensure column order ---
     new_df = pd.DataFrame(records)
+    ordered_cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count']
+    for col in ordered_cols:
+        if col not in new_df.columns:
+            new_df[col] = ''
+    new_df = new_df[ordered_cols]
+
+    #if verbose:
+    #    print(f"[DEBUG] New catalog entries:\n{new_df.head()}")
+
+    # --- Merge with old catalog, preferring new records ---
     if not new_df.empty:
         updated_catalog = pd.concat([catalog, new_df]).drop_duplicates(
             subset=['relative_path', 'filename', 'extension'], keep='last'
         ).reset_index(drop=True)
     else:
         updated_catalog = catalog.copy()
+
+    if verbose:
+        print(f"[DEBUG] Updated catalog after merge:\n{updated_catalog.head()}")
+
     # Remove catalog entries for files that no longer exist in the folder tree
     present_keys = set(
         (rec['relative_path'], rec['filename'], rec['extension']) for rec in records
@@ -300,334 +247,14 @@ def scan_and_update_catalog(
             axis=1
         )
     ].reset_index(drop=True)
+
     log_event("[END] scan_and_update_catalog", verbose)
     return updated_catalog
 
-    """
-    Scan root recursively, append only new files to catalog, and preserve token_count for existing files. Never overwrite or clear token_count for files already present in the catalog. Remove catalog rows for files missing from disk.
-    """
-    from core.log_utils import log_event
-    if excluded_files is None:
-        excluded_files = set()
-    # Build a set of all files currently on disk
-    disk_files = set()
-    records = []
-    for dirpath, _, filenames in os.walk(root):
-        for fname in filenames:
-            abs_fp = Path(dirpath) / fname
-            if is_excluded(abs_fp, excluded_files, root):
-                continue
-            rel_fp = abs_fp.relative_to(root)
-            ext = get_file_extension(fname)
-            # Skip .txt files in textracted folders
-            if ext.lower() == "txt" and extract_folder in abs_fp.parts:
-                continue
-            disk_files.add((str(rel_fp), fname, ext))
-            # Check if this file already exists in the catalog
-            mask = (
-                (catalog['relative_path'] == str(rel_fp)) &
-                (catalog['filename'] == fname) &
-                (catalog['extension'] == ext)
-            )
-            if mask.any():
-                # Already catalogued, preserve row as-is
-                continue
-            # New file: build record
-            record = {
-                'relative_path': str(rel_fp),
-                'filename': fname,
-                'extension': ext,
-                'textracted': False,
-                'token_count': ''
-            }
-            
-            # For PDFs, check if there's a matching txt file in the textracted folder
-            # This should happen regardless of whether --convert flag is set
-            if ext.lower() == "pdf":
-                # Determine top-level folder
-                pdf_rel = Path(str(rel_fp))
-                parts = pdf_rel.parts
-                if len(parts) > 1:
-                    top_level = parts[0]
-                    txt_path = root / top_level / extract_folder / (Path(fname).stem + '.txt')
-                else:
-                    # PDF is directly under root
-                    txt_path = root / extract_folder / (Path(fname).stem + '.txt')
-                    
-                # If txt file exists, mark as extracted regardless of convert flag
-                if txt_path.exists():
-                    from core.log_utils import log_event
-                    log_event(f"PDF already extracted: {txt_path}", verbose)
-                    record['textracted'] = True
-                    if tokenize:
-                        try:
-                            record['token_count'] = count_tokens(txt_path)
-                        except Exception as e:
-                            log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-            
-            # Tokenize if TXT and requested
-            if ext.lower() == "txt" and tokenize:
-                try:
-                    record['token_count'] = count_tokens(abs_fp)
-                except Exception as e:
-                    log_event(f"[ERROR] Token counting failed for {abs_fp}: {e}", verbose)
-            records.append(record)
-    # Append new records to catalog
-    if records:
-        new_df = pd.DataFrame(records)
-        updated_catalog = pd.concat([catalog, new_df], ignore_index=True)
-    else:
-        updated_catalog = catalog.copy()
-    # Remove catalog entries for files no longer on disk
-    present_keys = set(disk_files)
-    updated_catalog = updated_catalog[
-        updated_catalog.apply(
-            lambda row: (row['relative_path'], row['filename'], row['extension']) in present_keys,
-            axis=1
-        )
-    ].reset_index(drop=True)
-
-    # Fill in missing token_count if requested
-    if tokenize:
-        for idx, row in updated_catalog.iterrows():
-            if (row['extension'].lower() == 'txt') and (not row['token_count'] or str(row['token_count']).strip() == ''):
-                abs_fp = root / row['relative_path']
-                try:
-                    updated_catalog.at[idx, 'token_count'] = count_tokens(abs_fp)
-                except Exception as e:
-                    log_event(f"[ERROR] Token counting failed for {abs_fp}: {e}", verbose)
-
-    return updated_catalog
-
-    """
-    Scan the root directory recursively, cataloging all files except system files and .txt files in any textracted folder. Extract text from PDFs, and convert Markdown files to TXT.
-
-    Extraction Rule:
-        - For any PDF under root/X/... its .txt is saved to root/X/textracted/filename.txt (where X is the first-level subdir).
-        - For PDFs directly under root, use root/textracted/filename.txt.
-        - For Markdown (.md) files, convert to .txt in the same directory (not in textracted).
-        - For non-PDF/non-MD files, catalog but do not extract. Skip system files (e.g., .DS_Store) and all .txt files in textracted folders.
-        - Extraction status for PDFs is based solely on .txt presence in the correct textracted folder. Extraction status for MDs is based on .txt presence in the same folder.
-    Tokenization is only performed if tokenize=True.
-
-    Args:
-        root (Path): Root directory to scan.
-        extract_folder (str): Name of the extraction folder (e.g., 'textracted').
-        catalog (pd.DataFrame): Existing catalog DataFrame.
-        tokenize (bool): If True, count tokens in TXT files; otherwise, skip token counting.
-
-    Returns:
-        pd.DataFrame: Updated catalog DataFrame with all files and extraction status for PDFs.
-    """
-    records = []
-    for dirpath, dirs, files in os.walk(root):
-        # Skip textracted folders entirely for cataloging
-        if os.path.basename(dirpath) == extract_folder:
-            continue
-        if extract_folder in dirs:
-            dirs.remove(extract_folder)
-        for f in files:
-            abs_file_path = Path(dirpath) / f
-            if f in EXCLUDED_FILES:
-                from core.log_utils import log_event
-                log_event(f"File skipped (excluded): {abs_file_path}", verbose)
-                continue
-            # Exclusion logic: skip if file or any parent is excluded
-            if excluded_files and is_excluded(abs_file_path, excluded_files, root):
-                from core.log_utils import log_event
-                log_event(f"File skipped (excluded by config): {abs_file_path}", verbose)
-                continue
-            name, ext = os.path.splitext(f)
-            rel_dir = os.path.relpath(dirpath, root)
-            extension = get_file_extension(f)
-            # Do not catalog .txt files in any textracted folder
-            if extension.lower() == 'txt' and extract_folder in Path(dirpath).parts:
-                from core.log_utils import log_event
-                log_event(f"File skipped (.txt in textracted): {abs_file_path}", verbose)
-                continue
-            record = {
-                'relative_path': rel_dir,
-                'filename': name,
-                'extension': extension
-            }
-            if extension.lower() == 'pdf':
-                # Compute correct textracted folder
-                first_level = get_first_level_subdir(root, abs_file_path)
-                txt_dir = first_level / extract_folder
-                txt_path = txt_dir / (name + '.txt')
-                already_in_catalog = (
-                    (catalog['relative_path'] == rel_dir)
-                    & (catalog['filename'] == name)
-                    & (catalog['extension'] == ext.lstrip('.'))
-                )
-                skip_due_to_catalog = False
-                if already_in_catalog.any():
-                    # Already catalogued, check if extracted
-                    textracted = catalog.loc[already_in_catalog, 'textracted'].iloc[0]
-                    # Only skip if both catalog says extracted AND the .txt file actually exists
-                    if (textracted == True or textracted == 'True') and txt_path.exists():
-                        skip_due_to_catalog = True
-                if skip_due_to_catalog:
-                    from core.log_utils import log_event
-                    log_event(f"File skipped (already extracted): {abs_file_path}", verbose)
-                    record['textracted'] = True
-                    if tokenize:
-                        try:
-                            token_count = count_tokens(str(txt_path))
-                            record['token_count'] = token_count
-                            from core.log_utils import log_event
-                            log_event(f"Token count for {txt_path}: {token_count}", verbose)
-                        except Exception as e:
-                            record['token_count'] = ''
-                            from core.log_utils import log_event
-                            log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                    else:
-                        record['token_count'] = ''
-                    # Ensure textracted is last column
-                    record = {k: record[k] for k in ['relative_path', 'filename', 'extension']} | {'textracted': record['textracted'], 'token_count': record['token_count']}
-                    records.append(record)
-                    continue
-                # If txt file exists, mark as extracted - regardless of convert flag
-                if txt_path.exists():
-                    from core.log_utils import log_event
-                    log_event(f"PDF already extracted: {txt_path}", verbose)
-                    textracted = True
-                    if tokenize:
-                        try:
-                            token_count = count_tokens(txt_path)
-                        except Exception as e:
-                            log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                            token_count = ''
-                    else:
-                        token_count = ''
-                else:
-                    # Try extraction only if convert flag is set
-                    if convert:
-                        try:
-                            txt_dir.mkdir(parents=True, exist_ok=True)
-                            # Extract text from PDF and save to txt file
-                            success = extract_and_save(abs_file_path, txt_path)
-                            if success:
-                                from core.log_utils import log_event
-                                log_event(f"PDF extracted to {txt_path}", verbose)
-                                textracted = True
-                                if tokenize:
-                                    try:
-                                        token_count = count_tokens(txt_path)
-                                    except Exception as e:
-                                        log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                                        token_count = ''
-                                else:
-                                    token_count = ''
-                            else:
-                                textracted = False
-                                token_count = ''
-                        except Exception as e:
-                            from core.log_utils import log_event
-                            log_event(f"[ERROR] Exception during PDF extraction: {txt_path} | {e}", verbose)
-                            textracted = False
-                            token_count = ''
-                    else:
-                        # Skip extraction when convert flag is not set
-                        from core.log_utils import log_event
-                        log_event(f"PDF extraction skipped (--convert not set): {abs_file_path}", verbose)
-                        textracted = False
-                        token_count = ''
-                    record['textracted'] = textracted
-                record['token_count'] = token_count
-            elif extension.lower() == 'md':
-                # Handle MD file conversion only if convert flag is set
-                txt_path = Path(dirpath) / (name + '.txt')
-                if convert:
-                    try:
-                        # Convert MD to TXT
-                        converted_path = convert_md_to_txt(str(abs_file_path))
-                        from core.log_utils import log_event
-                        log_event(f"MD converted to TXT at {converted_path}", verbose)
-                        record['textracted'] = True
-                        
-                        # Count tokens if needed
-                        if tokenize and txt_path.exists():
-                            try:
-                                token_count = count_tokens(txt_path)
-                                record['token_count'] = token_count
-                            except Exception as e:
-                                log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                                record['token_count'] = ''
-                        else:
-                            record['token_count'] = ''
-                    except Exception as e:
-                        from core.log_utils import log_event
-                        log_event(f"[ERROR] Exception during MD conversion: {abs_file_path} | {e}", verbose)
-                        record['textracted'] = False
-                        record['token_count'] = ''
-                else:
-                    # Skip conversion when convert flag is not set
-                    from core.log_utils import log_event
-                    log_event(f"MD conversion skipped (--convert not set): {abs_file_path}", verbose)
-                    record['textracted'] = False
-                    record['token_count'] = ''
-            elif extension.lower() == 'vtt':
-                # Handle VTT file conversion only if convert flag is set
-                txt_path = Path(dirpath) / (name + '.txt')
-                if convert:
-                    try:
-                        # Convert VTT to TXT
-                        converted_path = extract_vtt_to_txt(str(abs_file_path), verbose)
-                        from core.log_utils import log_event
-                        log_event(f"VTT converted to TXT at {converted_path}", verbose)
-                        record['textracted'] = True
-                        
-                        # Count tokens if needed
-                        if tokenize and txt_path.exists():
-                            try:
-                                token_count = count_tokens(txt_path)
-                                record['token_count'] = token_count
-                            except Exception as e:
-                                log_event(f"[ERROR] Token counting failed for {txt_path}: {e}", verbose)
-                                record['token_count'] = ''
-                        else:
-                            record['token_count'] = ''
-                    except Exception as e:
-                        from core.log_utils import log_event
-                        log_event(f"[ERROR] Exception during VTT conversion: {abs_file_path} | {e}", verbose)
-                        record['textracted'] = False
-                        record['token_count'] = ''
-                else:
-                    # Skip conversion when convert flag is not set
-                    from core.log_utils import log_event
-                    log_event(f"VTT conversion skipped (--convert not set): {abs_file_path}", verbose)
-                    record['textracted'] = False
-                    record['token_count'] = ''
-            else:
-                record['textracted'] = False
-                record['token_count'] = ''
-            records.append(record)
-    # Merge with old catalog, preferring new records
-    new_df = pd.DataFrame(records)
-    if not new_df.empty:
-        updated_catalog = pd.concat([catalog, new_df]).drop_duplicates(
-            subset=['relative_path', 'filename', 'extension'], keep='last'
-        ).reset_index(drop=True)
-    else:
-        updated_catalog = catalog.copy()
-
-    # T3.10: Remove catalog entries for files that no longer exist in the folder tree
-    # Build a set of all (relative_path, filename, extension) present in the current scan
-    present_keys = set(
-        (rec['relative_path'], rec['filename'], rec['extension']) for rec in records
-    )
-    updated_catalog = updated_catalog[
-        updated_catalog.apply(
-            lambda row: (row['relative_path'], row['filename'], row['extension']) in present_keys,
-            axis=1
-        )
-    ].reset_index(drop=True)
-    return updated_catalog
 
 def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose: bool = False):
     """
-    Purpose: Save catalog DataFrame to CSV.
+    Purpose: Save catalog DataFrame to CSV, ensuring required column order.
     Inputs: catalog (pd.DataFrame), root (Path), catalog_folder (str), verbose (bool)
     Outputs: None
     Role: Persists the catalog for inspection and incremental runs. All logging is handled via log_utils.py.
@@ -635,6 +262,12 @@ def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose
     catalog_dir = root / catalog_folder
     catalog_dir.mkdir(parents=True, exist_ok=True)
     catalog_path = catalog_dir / 'latest-catalog.csv'
+    # Ensure column order before saving
+    ordered_cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count']
+    for col in ordered_cols:
+        if col not in catalog.columns:
+            catalog[col] = ''
+    catalog = catalog[ordered_cols]
     catalog.to_csv(catalog_path, index=False)
     from core.log_utils import log_event
     log_event(f"Catalog updated at {catalog_path}", verbose)

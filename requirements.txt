@@ -1,5 +1,6 @@
 # requirements.txt
-# Sprint 7 — 2025-05-23: Audit confirmed all dependencies are present and pinned.
+# Sprint 16 — 2025-06-04: Catalog enhancement cascade (T50.1–T50.5). Includes .txt in textracted, PDF–TXT mapping, tokenization, new columns, column order enforcement.
+# Sprint 8 — 2025-06-03: Added transcript archive functionality with CSV tracking.
 #
 # Pin all dependencies (standard and third-party) for reproducibility and audit.
 # Python 3.10+ assumed.

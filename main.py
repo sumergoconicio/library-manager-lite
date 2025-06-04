@@ -58,7 +58,7 @@ def display_help(parser):
     
     print("\nEXAMPLES:")
     print("  python main.py                      # Run incremental catalog update")
-    print("  python main.py --catalog            # Regenerate catalog from scratch")
+    print("  python main.py --recatalog          # Force regenerate catalog from scratch")
     print("  python main.py --analysis           # Analyze existing catalog")
     print("  python main.py --convert            # Extract text from PDFs and convert MD to TXT")
     print("  python main.py --verbose --tokenize # Run with verbose logging and token counting")
@@ -71,7 +71,7 @@ def main():
     """
     Purpose: CLI entry point for Library Manager.
     Inputs:
-        --catalog: Regenerate catalog from scratch (force new)
+        --recatalog: Force regenerate catalog from scratch (full refresh). Automatically includes text conversion and tokenization.
         --analysis: Run catalog analysis and output summary to latest-breakdown.txt
         --verbose: Enable verbose logging to core/logs.txt
         --tokenize: Enable token-counting in catalog_files.py
@@ -87,7 +87,7 @@ def main():
     Provides enhanced help system that can handle future flags.
     """
     parser = argparse.ArgumentParser(description="Library Manager Lite", add_help=False)
-    parser.add_argument("--catalog", action="store_true", help="Regenerate catalog from scratch (force new)")
+    parser.add_argument("--recatalog", action="store_true", help="Force regenerate catalog from scratch (full refresh). Automatically includes text conversion and tokenization.")
     parser.add_argument("--analysis", action="store_true", help="Run catalog analysis and output summary to latest-breakdown.txt")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging to core/logs.txt")
     parser.add_argument("--tokenize", action="store_true", help="Enable token-counting in catalog_files.py")
@@ -99,9 +99,10 @@ def main():
     args = parser.parse_args()
 
     # Dispatch table for CLI actions
-    def handle_catalog():
+    def handle_recatalog():
         config_path = Path("user_inputs/folder_paths.json")
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=args.tokenize, force_new=True, convert=args.convert)
+        # When --recatalog is used, convert and tokenize are implicitly True
+        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=True, convert=True)
 
     def handle_analysis():
         print("[DEBUG] Starting catalog analysis...")
@@ -121,6 +122,11 @@ def main():
         from adapters.yt_transcriber import process_transcript_request
         config = load_config("user_inputs/folder_paths.json", required_keys=["yt_transcripts_folder"])
         process_transcript_request(config, verbose=args.verbose)
+        # Run incremental catalog update after transcription with tokenize=True
+        print("[INFO] Running incremental catalog update to include new transcript files...")
+        config_path = Path("user_inputs/folder_paths.json")
+        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=False)
+        print("[INFO] Catalog update complete with token counting enabled.")
 
     def handle_incremental():
         config_path = Path("user_inputs/folder_paths.json")
@@ -145,8 +151,8 @@ def main():
             print(str(e))
             sys.exit(1)
         sys.exit(0)
-    elif args.catalog:
-        handle_catalog()
+    elif args.recatalog:
+        handle_recatalog()
     elif args.analysis:
         handle_analysis()
     else:

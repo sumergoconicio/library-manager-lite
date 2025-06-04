@@ -21,16 +21,16 @@ Library Manager Lite is a modular, auditable tool for extracting text from PDFs,
 Run from the command line:
 
 ```sh
-python main.py [--catalog] [--analysis] [--verbose] [--tokenize] [--identify] [--transcribe]
+python main.py [--recatalog] [--analysis] [--verbose] [--tokenize] [--identify] [--transcribe]
 ```
 
-- `--catalog`: Regenerate catalog from scratch
+- `--recatalog`: Regenerate catalog from scratch (automatically includes text conversion and tokenization)
 - `--analysis`: Output summary analysis to latest-breakdown.txt
 - `--verbose`: Log every process iteration
 - `--tokenize`: Count tokens in TXT files and add to catalog
 - `--convert`: Convert PDFs to TXT, MD files to TXT, and VTT files to TXT
 - `--identify`: Rename PDFs in buffer_folder using LLM
-- `--transcribe`: Download transcripts from YouTube videos/playlists and automatically convert VTT to TXT
+- `--transcribe`: Download transcripts from YouTube videos/playlists, convert VTT to TXT, and automatically run incremental catalog update with token counting enabled
 
 ## Configuration
 Edit `user_inputs/folder-paths.json` to set:
@@ -123,9 +123,9 @@ python main.py
 
 ### CLI Flag Stacking and Precedence (2025-05-25)
 
-- Only one main operation runs per invocation: `--identify`, `--catalog`, `--analysis`, `--transcribe`, or (default) incremental update.
+- Only one main operation runs per invocation: `--identify`, `--recatalog`, `--analysis`, `--transcribe`, or (default) incremental update.
 - Modifier flags (`--convert`, `--tokenize`, `--verbose`) stack and modify the main operation.
-- If multiple main-operation flags are passed, the first matched in priority order is executed: `--identify` > `--transcribe` > `--catalog` > `--analysis` > default.
+- If multiple main-operation flags are passed, the first matched in priority order is executed: `--identify` > `--transcribe` > `--recatalog` > `--analysis` > default.
 - Mutually exclusive flags are not enforced by argparse; user should avoid passing conflicting main-operation flags.
 
 #### Scenario Table
@@ -133,11 +133,11 @@ python main.py
 | Scenario                         | Catalog Mode      | Extraction/Convert | Tokenize | Verbose | Notes                                 |
 |-----------------------------------|-------------------|--------------------|----------|---------|---------------------------------------|
 | (1) No flags                     | Incremental       | No                 | No       | No      | Only new files catalogued             |
-| (2) --catalog                    | Full rebuild      | No                 | No       | No      | Catalog replaced                      |
-| (3) --catalog --convert --tokenize| Full rebuild      | Yes                | Yes      | No      | All features active                   |
+| (2) --recatalog                    | Full rebuild      | Yes                | Yes      | No      | Catalog replaced, convert & tokenize implied |
+| (3) --recatalog --convert --tokenize| Full rebuild      | Yes                | Yes      | No      | All features active                   |
 | (4) --convert --verbose          | Incremental       | Yes                | No       | Yes     | Extraction + logging, no token count  |
 
-> **Note:** If you pass multiple main-operation flags (e.g., `--catalog --analysis`), only the first in priority order will run. Modifiers can be freely combined with any main operation.
+> **Note:** If you pass multiple main-operation flags (e.g., `--recatalog --analysis`), only the first in priority order will run. Modifiers can be freely combined with any main operation.
 
 ---
 
@@ -160,10 +160,13 @@ python main.py
 
 - `your_root/_catalog/catalog.csv`:
 
-| relative_path | filename | extension | textracted |
-|---------------|----------|-----------|------------|
-| 2024/letters  | file1    | pdf       | True       |
-| 2024/images   | img1     | jpg       |            |
+| relative_path | filename | extension | last_modified | file_size | textracted | token_count |
+|---------------|----------|-----------|--------------|-----------|------------|-------------|
+| 2024/letters  | file1    | pdf       | 2025-06-04   | 2.1       | True       | 12000       |
+| 2024/images   | img1     | jpg       | 2025-06-04   | 0.3       |            |             |
+
+_Note: Column order is now strictly enforced as: relative_path, filename, extension, last_modified, file_size, textracted, token_count._
+
 
 - Extracted text: `your_root/2024/textracted/file1.txt`
 
@@ -181,9 +184,23 @@ This will:
 1. Prompt for a YouTube video or playlist URL
 2. Optionally prompt for a subfolder name to organize transcripts
 3. Download all available transcripts to the configured `yt_transcripts_folder`
-4. Track downloaded videos in `catalog_folder/yt-transcribed.txt` to avoid duplicates
+4. Convert VTT files to TXT format and delete the original VTT files
+5. Track downloaded videos in `catalog_folder/latest-transcript-archive.csv` to avoid duplicates
 
-Transcripts are saved in SRT format with filenames based on upload date and video title.
+Transcripts are saved with filenames based on upload date and video title. The system maintains a CSV archive of all downloaded transcripts with the following information:
+- Filename
+- YouTube URL
+- Date added
+
+This ensures that each video is only downloaded once, even across multiple sessions. The system checks both the filename and video ID to prevent duplicates.
+
+For playlists, each video is processed individually and tracked in the archive.
+
+---
+
+## Transcript Archive
+
+The `transcript_archive.py` module is responsible for managing the transcript archive. It uses a CSV file to keep track of downloaded transcripts and prevents duplicates by checking the filename and video ID.
 
 ---
 

@@ -1,0 +1,8 @@
+{
+    "process_priority": [
+        "identify",
+        "transcribe",
+        "recatalog",
+        "analysis"
+    ]
+}
