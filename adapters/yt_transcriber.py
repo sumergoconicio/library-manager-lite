@@ -137,7 +137,7 @@ def convert_vtt_files(folder_path: Path, verbose: bool = False) -> List[str]:
     Role: Helper function to process VTT files after download
     """
     from core.log_utils import log_event
-    from core.convertVTTtoTXT import extract_vtt_to_txt
+    from ports.convertVTTtoTXT import extract_vtt_to_txt
     
     converted_files = []
     

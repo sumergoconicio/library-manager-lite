@@ -1,8 +1,8 @@
 """
-core/convertVTTtoTXT.py | VTT to TXT Conversion Module
+ports/convertVTTtoTXT.py | VTT to TXT Conversion Module
 Purpose: Convert VTT subtitle files to plain text, extracting styled text and removing formatting tags
 Author: ChAI-Engine (chaiji)
-Last-Updated: 2025-06-02
+Last-Updated: 2025-06-04
 Non-Std Deps: None
 Abstract Spec: Extracts styled lines from VTT files, strips tags, removes duplicates, saves as TXT, and deletes original VTT.
 """
@@ -96,7 +96,7 @@ def extract_vtt_to_txt(vtt_file_path: str, verbose: bool = False) -> str:
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python -m core.convertVTTtoTXT <vtt_file_path> [--verbose]")
+        print("Usage: python -m ports.convertVTTtoTXT <vtt_file_path> [--verbose]")
         sys.exit(1)
         
     vtt_file = sys.argv[1]

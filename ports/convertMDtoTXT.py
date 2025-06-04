@@ -1,8 +1,8 @@
 """
-core/convertMDtoTXT.py
+ports/convertMDtoTXT.py
 Markdown-to-TXT Conversion Utility
 Author: ChAI-Engine
-Last-Updated: 2025-05-23
+Last-Updated: 2025-06-04
 Non-Std Deps: None
 Abstract Spec: Accept a single MD file path, extract the filename, and save a copy as .txt in the same directory.
 """
@@ -41,8 +41,8 @@ def main(verbose: bool = False):
     """
     import sys
     if len(sys.argv) != 2:
-        log_event('Usage: python core/convertMDtoTXT.py <path-to-md-file>', verbose)
-        print('Usage: python core/convertMDtoTXT.py <path-to-md-file>')
+        log_event('Usage: python ports/convertMDtoTXT.py <path-to-md-file>', verbose)
+        print('Usage: python ports/convertMDtoTXT.py <path-to-md-file>')
         sys.exit(1)
     md_path = sys.argv[1]
     try:

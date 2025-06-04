@@ -12,8 +12,8 @@ from pathlib import Path
 import pandas as pd
 import json
 from core.extract_text import extract_and_save
-from core.convertMDtoTXT import convert_md_to_txt
-from core.convertVTTtoTXT import extract_vtt_to_txt
+from ports.convertMDtoTXT import convert_md_to_txt
+from ports.convertVTTtoTXT import extract_vtt_to_txt
 from core.file_utils import get_file_extension
 from core.token_counter import count_tokens
 from core.log_utils import log_event
