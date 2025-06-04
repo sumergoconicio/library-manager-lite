@@ -4,7 +4,7 @@ Purpose: Analyze catalog data from SQLite for file/folder/extension/token statis
 Author: ChAI-Engine (chaiji)
 Last-Updated: 2025-06-04
 Non-Std Deps: pandas, sqlite3
-Abstract Spec: Loads catalog data from SQLite, computes summary statistics (files/textracted/tokens per folder with totals, extensions with totals, textracted files, token counts), outputs tables as separate CSV files (latest-folder-breakdown.csv, latest-extension-breakdown.csv).
+Abstract Spec: Loads catalog data from SQLite, computes summary statistics (files/textracted/tokens per folder with totals, extensions with totals, textracted files, token counts), outputs tables as separate CSV files (latest-folder-breakdown.csv, latest-extension-breakdown.csv, latest-folder-breadcrumbs.csv).
 """
 
 import sqlite3
@@ -31,7 +31,7 @@ def load_catalog_from_sqlite(db_path: Path, verbose: bool = False) -> pd.DataFra
         log_event(f"[ERROR] Failed to load from SQLite database: {e}", verbose)
         return None
 
-def analyze_catalog(output_mode="csv", verbose: bool = False):
+def analyze_catalog(output_mode="csv", verbose: bool = False, concise: bool = True):
     """
     Purpose: Analyze catalog data from SQLite and output summary tables as separate CSV files.
     Inputs: 
@@ -60,6 +60,7 @@ def analyze_catalog(output_mode="csv", verbose: bool = False):
     # Define paths for the separate CSV files
     folder_breakdown_path = Path(root_folder) / catalog_folder / "latest-folder-breakdown.csv"
     extension_breakdown_path = Path(root_folder) / catalog_folder / "latest-extension-breakdown.csv"
+    folder_breadcrumbs_path = Path(root_folder) / catalog_folder / "latest-folder-breadcrumbs.csv"
     
     # Load from SQLite database
     if not sqlite_path.exists():
@@ -79,6 +80,33 @@ def analyze_catalog(output_mode="csv", verbose: bool = False):
     
     # Extract top-level folder from relative_path
     df['top_folder'] = df['relative_path'].apply(lambda x: Path(x).parts[0] if Path(x).parts else 'unknown')
+    
+    # Generate breadcrumb paths for all folders and subfolders
+    log_event("[INFO] Generating folder breadcrumbs", verbose)
+    all_paths = df['relative_path'].apply(lambda x: Path(x))
+    
+    # Extract all unique folder paths including intermediate folders
+    unique_folders = set()
+    for path in all_paths:
+        parts = path.parts
+        # Add each level of the path hierarchy
+        for i in range(1, len(parts)):
+            unique_folders.add('/'.join(parts[:i]))
+        # Add the full path if it's a directory
+        if len(parts) > 0:
+            unique_folders.add('/'.join(parts))
+    
+    # Create breadcrumbs dataframe - sort folder paths strictly alphabetically
+    folder_paths = sorted(list(unique_folders))
+    
+    # Create dataframe with just the folder paths
+    breadcrumbs_df = pd.DataFrame({
+        'folder_path': folder_paths
+    })
+    
+    # Save breadcrumbs to CSV
+    breadcrumbs_df.to_csv(folder_breadcrumbs_path, index=False)
+    log_event(f"[INFO] Saved folder breadcrumbs to {folder_breadcrumbs_path}", verbose)
     
     # Ensure textracted column exists and is properly formatted
     if 'textracted' not in df.columns:
@@ -146,25 +174,51 @@ def analyze_catalog(output_mode="csv", verbose: bool = False):
             'value': [str(int(textracted_count)), "Error calculating total"]
         })
     
-    # Format output as plain text (for backward compatibility)
-    summary_lines = []
-    summary_lines.append("Files, textracted files, and token count per top-level folder:")
-    summary_lines.append(folder_stats.to_string(index=False))
-    summary_lines.append("\nFile count by extension:")
-    summary_lines.append(ext_counts.to_string(index=False))
-    summary_lines.append(f"\nNumber of textracted files: {int(total_textracted)}")
-    summary_lines.append(f"Total token count: {int(total_tokens)}")
+    # Format output as plain text
+    if concise:
+        # Concise summary with just the totals
+        summary_lines = [
+            "Catalog updated. Analysis underway.",
+            f"Total files: {int(total_files)}",
+            f"Total textracted: {int(total_textracted)}",
+            f"Total size in MB: {total_file_size:.3f}",
+            f"Total tokens: {int(total_tokens)}",
+            "",
+            f"Analysis complete. Outputs saved to {catalog_folder} location."
+        ]
+    else:
+        # Detailed summary (original format)
+        summary_lines = []
+        summary_lines.append("Files, textracted files, and token count per top-level folder:")
+        summary_lines.append(folder_stats.to_string(index=False))
+        summary_lines.append("\nFile count by extension:")
+        summary_lines.append(ext_counts.to_string(index=False))
+        summary_lines.append(f"\nNumber of textracted files: {int(total_textracted)}")
+        summary_lines.append(f"Total token count: {int(total_tokens)}")
     
     summary_txt = "\n".join(summary_lines)
     
     # Save to CSV files
     folder_stats.to_csv(folder_breakdown_path, index=False)
     ext_counts.to_csv(extension_breakdown_path, index=False)
-    log_event(f"[INFO] Saved analysis outputs to {folder_breakdown_path}, {extension_breakdown_path}", verbose)
+    log_event(f"[INFO] Saved analysis outputs to {folder_breakdown_path}, {extension_breakdown_path}, {folder_breadcrumbs_path}", verbose)
     
     if output_mode == "print":
-        log_event(summary_txt, verbose)
+        # Always print the summary, regardless of verbose setting
         print(summary_txt)
+        
+        # Log the full details only if verbose is enabled
+        if verbose and concise:
+            # Log the detailed summary if we're only showing concise output to the user
+            detailed_summary = "\n".join([
+                "Files, textracted files, and token count per top-level folder:",
+                folder_stats.to_string(index=False),
+                "\nFile count by extension:",
+                ext_counts.to_string(index=False),
+                f"\nNumber of textracted files: {int(total_textracted)}",
+                f"Total token count: {int(total_tokens)}"
+            ])
+            log_event(detailed_summary, True)
     elif output_mode == "return":
         log_event("[INFO] Returning analysis results as dict", verbose)
         return {
@@ -175,7 +229,8 @@ def analyze_catalog(output_mode="csv", verbose: bool = False):
             "summary_txt": summary_txt,
             "csv_paths": {
                 "folder_breakdown": str(folder_breakdown_path),
-                "extension_breakdown": str(extension_breakdown_path)
+                "extension_breakdown": str(extension_breakdown_path),
+                "folder_breadcrumbs": str(folder_breadcrumbs_path)
             }
         }
     # output_mode == 'csv' does not print or return, just writes files
@@ -185,5 +240,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Analyze catalog data for summary statistics.")
     parser.add_argument("--output_mode", default="csv", help="Output mode: print, csv (default), or return")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
+    parser.add_argument("--detailed", action="store_true", help="Show detailed output instead of concise summary")
     args = parser.parse_args()
-    analyze_catalog(output_mode=args.output_mode, verbose=args.verbose)
+    analyze_catalog(output_mode=args.output_mode, verbose=args.verbose, concise=not args.detailed)

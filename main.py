@@ -57,9 +57,10 @@ def display_help(parser):
         print(f"  {flag:<{max_flag_length}} {help_text}")
     
     print("\nEXAMPLES:")
-    print("  python main.py                      # Run incremental catalog update")
-    print("  python main.py --recatalog          # Force regenerate catalog from scratch")
-    print("  python main.py --analysis           # Analyze existing catalog")
+    print("  python main.py                      # Run incremental catalog update with analysis")
+    print("  python main.py --recatalog          # Force regenerate catalog from scratch with analysis")
+    print("  python main.py --no-analysis        # Run incremental update without analysis")
+    print("  python main.py --analysis           # Only analyze existing catalog (no updates)")
     print("  python main.py --convert            # Extract text from PDFs and convert MD to TXT")
     print("  python main.py --verbose --tokenize # Run with verbose logging and token counting")
     print("  python main.py --convert --tokenize # Extract text and count tokens")
@@ -81,14 +82,15 @@ def main():
         --help: Display this help message and exit
     Outputs: None
     Role: Loads config, runs incremental or full catalog workflow per CLI flags, passes flags to modules. 
-    By default, only new files are appended to the catalog (incremental update). 
-    Tokenization is only performed if --tokenize is set.
-    Text extraction and conversion only occur if --convert is set.
+    By default, only new files are appended to the catalog (incremental update) and analysis is run afterward.
+    Tokenization is always enabled for catalog operations.
+    Text extraction and conversion are always enabled for catalog operations.
     Provides enhanced help system that can handle future flags.
     """
     parser = argparse.ArgumentParser(description="Library Manager Lite", add_help=False)
     parser.add_argument("--recatalog", action="store_true", help="Force regenerate catalog from scratch (full refresh). Automatically includes text conversion and tokenization.")
-    parser.add_argument("--analysis", action="store_true", help="Run catalog analysis and output summary to latest-breakdown.txt")
+    parser.add_argument("--analysis", action="store_true", default=None, help="Run catalog analysis and output summary to latest-breakdown.txt")
+    parser.add_argument("--no-analysis", action="store_false", dest="analysis", help="Skip running catalog analysis (overrides default behavior)")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging to core/logs.txt")
     parser.add_argument("--tokenize", action="store_true", help="Enable token-counting in catalog_files.py")
     parser.add_argument("--convert", action="store_true", help="Convert MD files to TXT and extract text from PDFs")
@@ -104,11 +106,17 @@ def main():
         config_path = Path("user_inputs/folder_paths.json")
         # When --recatalog is used, convert and tokenize are implicitly True
         run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=True, convert=True, backup_db=args.backupdb)
+        # Run analysis by default after recataloging
+        handle_analysis()
 
-    def handle_analysis():
-        print("[DEBUG] Starting catalog analysis...")
-        analyze_catalog(output_mode="print", verbose=args.verbose)
-        print("[DEBUG] Analysis complete. Output written to latest-breakdown.txt.")
+    def handle_analysis(force_run=False):
+        # Skip if analysis flag is explicitly set to False, unless force_run is True
+        if not args.analysis and args.analysis is not None and not force_run:
+            return
+        
+        # Use concise output by default, detailed output if explicitly requested with --analysis
+        use_concise = not (args.analysis and not force_run)
+        analyze_catalog(output_mode="print", verbose=args.verbose, concise=use_concise)
 
     def handle_identify():
         from core.PDF_renamer import process_pdf_directory
@@ -134,6 +142,8 @@ def main():
         config_path = Path("user_inputs/folder_paths.json")
         # Always enable convert and tokenize for incremental updates
         run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=True, backup_db=args.backupdb)
+        # Run analysis by default after incremental update
+        handle_analysis()
 
     # Help flag takes priority
     if args.help:
@@ -157,7 +167,8 @@ def main():
     elif args.recatalog:
         handle_recatalog()
     elif args.analysis:
-        handle_analysis()
+        # Only run analysis if explicitly requested
+        handle_analysis(force_run=True)
     else:
         handle_incremental()
 
