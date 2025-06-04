@@ -22,7 +22,7 @@ Library Manager Lite is a modular, auditable tool for extracting text from PDFs,
 Run from the command line:
 
 ```sh
-python main.py [--recatalog] [--analysis] [--verbose] [--tokenize] [--identify] [--transcribe]
+python main.py [--recatalog] [--analysis] [--verbose] [--tokenize] [--identify] [--transcribe] [--backupdb]
 ```
 
 - `--recatalog`: Regenerate catalog from scratch (automatically includes text conversion and tokenization)
@@ -32,6 +32,7 @@ python main.py [--recatalog] [--analysis] [--verbose] [--tokenize] [--identify] 
 - `--convert`: Convert PDFs to TXT, MD files to TXT, and VTT files to TXT
 - `--identify`: Rename PDFs in buffer_folder using LLM
 - `--transcribe`: Download transcripts from YouTube videos/playlists, convert VTT to TXT, and automatically run incremental catalog update with token counting enabled
+- `--backupdb`: Create a timestamped backup of the SQLite database after saving the catalog
 
 ## Configuration
 Edit `user_inputs/folder-paths.json` to set:
@@ -221,7 +222,15 @@ As of Sprint 24 (2025-06-04), Library Manager Lite now saves catalog data to a S
 - If the SQLite database is unavailable or fails to load, the system falls back to using the CSV file
 - This integration provides better data integrity and robustness while maintaining backward compatibility
 
-This enhancement is completely transparent to users - no additional configuration or commands are needed. The system automatically maintains both storage formats and intelligently selects the best data source for analysis operations.
+As of Sprint 25 (2025-06-04), a database backup feature has been added:
+
+- Use the `--backupdb` flag to create timestamped backups of the SQLite database
+- Backups are named with format `YYYYMMDDHHmmss.library.sqlite.backup` for easy identification
+- Backups are stored in the same catalog folder as the main database
+- The backup is created after saving the catalog, ensuring all changes are included
+- When combined with `--verbose`, detailed logging of the backup process is provided
+
+This enhancement is completely transparent to users - no additional configuration or commands are needed beyond the optional `--backupdb` flag. The system automatically maintains both storage formats and intelligently selects the best data source for analysis operations.
 
 ---
 

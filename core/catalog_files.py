@@ -253,10 +253,10 @@ def scan_and_update_catalog(
     return updated_catalog
 
 
-def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose: bool = False):
+def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose: bool = False, backup_db: bool = False):
     """
     Purpose: Save catalog DataFrame to CSV and SQLite, ensuring required column order.
-    Inputs: catalog (pd.DataFrame), root (Path), catalog_folder (str), verbose (bool)
+    Inputs: catalog (pd.DataFrame), root (Path), catalog_folder (str), verbose (bool), backup_db (bool)
     Outputs: None
     Role: Persists the catalog for inspection and incremental runs. All logging is handled via log_utils.py.
     """
@@ -275,20 +275,21 @@ def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose
     log_event(f"Catalog updated at {catalog_path}", verbose)
     
     # Save to SQLite database
-    save_dataframe_to_sqlite(catalog, root, catalog_folder, verbose=verbose)
+    save_dataframe_to_sqlite(catalog, root, catalog_folder, verbose=verbose, backup_db=backup_db)
 
 
 from core.log_utils import log_event
 
-def run_catalog_workflow(config_path: Path, verbose: bool = False, tokenize: bool = False, force_new: bool = False, convert: bool = False):
+def run_catalog_workflow(config_path: Path, verbose: bool = False, tokenize: bool = False, force_new: bool = False, convert: bool = False, backup_db: bool = False):
     """
     Purpose: Main entry for catalog management and extraction.
-    Inputs: config_path (Path), verbose (bool), tokenize (bool), force_new (bool), convert (bool)
+    Inputs: config_path (Path), verbose (bool), tokenize (bool), force_new (bool), convert (bool), backup_db (bool)
     Outputs: None
     Role: Loads config, manages catalog, triggers extraction. All logging is handled via log_utils.py.
     Tokenization is only performed if tokenize=True.
     Text extraction and conversion only occur if convert=True.
     If force_new is True, always create a new catalog from scratch.
+    If backup_db is True, create a backup of the SQLite database.
     """
     config = load_config(config_path)
     catalog_dir = config['root'] / config['catalog_folder']
@@ -304,4 +305,4 @@ def run_catalog_workflow(config_path: Path, verbose: bool = False, tokenize: boo
     catalog = scan_and_update_catalog(
         config['root'], config['extract_path'], catalog, config.get('excluded_files', set()), verbose=verbose, tokenize=tokenize, convert=convert
     )
-    save_catalog(catalog, config['root'], config['catalog_folder'], verbose=verbose)
+    save_catalog(catalog, config['root'], config['catalog_folder'], verbose=verbose, backup_db=backup_db)

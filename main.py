@@ -94,6 +94,7 @@ def main():
     parser.add_argument("--convert", action="store_true", help="Convert MD files to TXT and extract text from PDFs")
     parser.add_argument("--identify", action="store_true", help="Run PDF renaming workflow on buffer_folder")
     parser.add_argument("--transcribe", action="store_true", help="Download transcripts from YouTube videos")
+    parser.add_argument("--backupdb", action="store_true", help="Create a backup of the SQLite database in the catalog folder")
     parser.add_argument("--help", "-h", action="store_true", help="Display this help message and exit")
 
     args = parser.parse_args()
@@ -102,7 +103,7 @@ def main():
     def handle_recatalog():
         config_path = Path("user_inputs/folder_paths.json")
         # When --recatalog is used, convert and tokenize are implicitly True
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=True, convert=True)
+        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=True, convert=True, backup_db=args.backupdb)
 
     def handle_analysis():
         print("[DEBUG] Starting catalog analysis...")
@@ -126,13 +127,13 @@ def main():
         # Run incremental catalog update after transcription with tokenize=True
         print("[INFO] Running incremental catalog update to include new transcript files...")
         config_path = Path("user_inputs/folder_paths.json")
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=False)
+        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=False, backup_db=args.backupdb)
         print("[INFO] Catalog update complete with token counting enabled.")
 
     def handle_incremental():
         config_path = Path("user_inputs/folder_paths.json")
         # Always enable convert and tokenize for incremental updates
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=True)
+        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=True, backup_db=args.backupdb)
 
     # Help flag takes priority
     if args.help:
