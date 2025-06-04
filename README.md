@@ -7,7 +7,7 @@ Library Manager Lite is a modular, auditable tool for extracting text from PDFs,
 
 ## Features
 - Bulk PDF text extraction (PyMuPDF)
-- Incremental cataloguing (CSV)
+- Incremental cataloguing (CSV and SQLite)
 - Token counting for TXT files (tiktoken)
 - MD to TXT conversion
 - VTT subtitle to TXT conversion
@@ -16,6 +16,7 @@ Library Manager Lite is a modular, auditable tool for extracting text from PDFs,
 - CLI flags for all major workflows
 - Catalog analysis with plain text output
 - YouTube transcript downloading with automatic VTT to TXT conversion
+- SQLite database integration for robust data storage and querying
 
 ## Usage
 Run from the command line:
@@ -41,8 +42,13 @@ Edit `user_inputs/folder-paths.json` to set:
 - `buffer_folder` (folder containing PDFs to rename)
 - `yt_transcripts_folder` (folder to save YouTube transcripts)
 
+Edit `user_inputs/llm_config.json` to configure LLM providers for different workflows:
+- `workflows`: Map workflow names to provider/model configurations
+- `defaults`: Default provider/model configuration
+
 ## Outputs
-- `latest-catalog.csv`: Catalog of all files
+- `latest-catalog.csv`: Catalog of all files (CSV format)
+- `library.sqlite`: Catalog database (SQLite format)
 - `latest-breakdown.txt`: Analysis summary
 - `logs.txt`: Process log (if verbose)
 
@@ -53,6 +59,13 @@ Edit `user_inputs/folder-paths.json` to set:
 - litellm==1.27.6
 - yt-dlp==2023.11.16
 - pytest==8.2.0 (testing)
+
+## Environment Variables
+Set these in your environment or in a `.env` file in the project root:
+- API keys for LLM providers as specified in `user_inputs/llm_config.json`
+  - Example: `ANTHROPIC_API_KEY=your_api_key_here`
+  - Example: `OPENAI_API_KEY=your_api_key_here`
+- See `user_inputs/llm_provider_usage.md` for more details
 
 ## Project Structure
 See `dev/architecture.md` and `dev/project-brief.md` for detailed module responsibilities and data flow.
@@ -195,6 +208,20 @@ Transcripts are saved with filenames based on upload date and video title. The s
 This ensures that each video is only downloaded once, even across multiple sessions. The system checks both the filename and video ID to prevent duplicates.
 
 For playlists, each video is processed individually and tracked in the archive.
+
+---
+
+## SQLite Database Integration
+
+As of Sprint 24 (2025-06-04), Library Manager Lite now saves catalog data to a SQLite database alongside the CSV format:
+
+- The catalog is automatically saved to both formats whenever it's updated
+- The SQLite database (`library.sqlite`) is stored in the catalog folder
+- Catalog analysis now primarily uses the SQLite database for improved performance and query capabilities
+- If the SQLite database is unavailable or fails to load, the system falls back to using the CSV file
+- This integration provides better data integrity and robustness while maintaining backward compatibility
+
+This enhancement is completely transparent to users - no additional configuration or commands are needed. The system automatically maintains both storage formats and intelligently selects the best data source for analysis operations.
 
 ---
 

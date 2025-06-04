@@ -115,7 +115,8 @@ def main():
         config = load_config("user_inputs/folder_paths.json", required_keys=["buffer_folder"])
         buffer_folder = config["buffer_folder"]
         prompt = load_prompt("ports/llm_title_guesser.txt")
-        llm = get_llm_provider()
+        # Use the workflow-specific LLM provider for identification
+        llm = get_llm_provider(workflow="identify")
         process_pdf_directory(Path(buffer_folder), llm, prompt, n_pages=5, verbose=args.verbose)
 
     def handle_transcribe():
@@ -130,7 +131,8 @@ def main():
 
     def handle_incremental():
         config_path = Path("user_inputs/folder_paths.json")
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=args.tokenize, force_new=False, convert=args.convert)
+        # Always enable convert and tokenize for incremental updates
+        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=True)
 
     # Help flag takes priority
     if args.help:

@@ -17,6 +17,7 @@ from core.convertVTTtoTXT import extract_vtt_to_txt
 from core.file_utils import get_file_extension
 from core.token_counter import count_tokens
 from core.log_utils import log_event
+from adapters.save_to_sqlite import save_dataframe_to_sqlite
 
 def get_file_size_in_mb(file_path: str) -> float:
     """
@@ -254,7 +255,7 @@ def scan_and_update_catalog(
 
 def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose: bool = False):
     """
-    Purpose: Save catalog DataFrame to CSV, ensuring required column order.
+    Purpose: Save catalog DataFrame to CSV and SQLite, ensuring required column order.
     Inputs: catalog (pd.DataFrame), root (Path), catalog_folder (str), verbose (bool)
     Outputs: None
     Role: Persists the catalog for inspection and incremental runs. All logging is handled via log_utils.py.
@@ -268,9 +269,13 @@ def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose
         if col not in catalog.columns:
             catalog[col] = ''
     catalog = catalog[ordered_cols]
+    
+    # Save to CSV
     catalog.to_csv(catalog_path, index=False)
-    from core.log_utils import log_event
     log_event(f"Catalog updated at {catalog_path}", verbose)
+    
+    # Save to SQLite database
+    save_dataframe_to_sqlite(catalog, root, catalog_folder, verbose=verbose)
 
 
 from core.log_utils import log_event
