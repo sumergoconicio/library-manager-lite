@@ -8,13 +8,14 @@ Library Manager Lite is a modular, auditable tool for extracting text from PDFs,
 ## Features
 - Bulk PDF text extraction (PyMuPDF)
 - Incremental cataloguing (CSV and SQLite)
-- Token counting for TXT files (tiktoken)
+- Token counting for TXT files using heuristic estimation
 - MD to TXT conversion
 - VTT subtitle to TXT conversion
 - Exclusion logic via config
 - Unified logging with verbose mode
 - CLI flags for all major workflows
-- Catalog analysis with plain text output
+- Comprehensive catalog analysis with folder-level and extension-level breakdowns
+- File size tracking and analysis with precise formatting
 - YouTube transcript downloading with automatic VTT to TXT conversion
 - SQLite database integration for robust data storage and querying
 
@@ -49,8 +50,9 @@ Edit `user_inputs/llm_config.json` to configure LLM providers for different work
 
 ## Outputs
 - `latest-catalog.csv`: Catalog of all files (CSV format)
-- `library.sqlite`: Catalog database (SQLite format)
-- `latest-breakdown.txt`: Analysis summary
+- `library.sqlite`: Catalog database (SQLite format) with indexed columns for efficient querying
+- `latest-folder-breakdown.csv`: Folder-level analysis with file counts, textracted counts, file sizes (MB with 3 decimal precision), and token counts
+- `latest-extension-breakdown.csv`: Extension-type analysis with file counts per extension
 - `logs.txt`: Process log (if verbose)
 
 ## Requirements
@@ -73,7 +75,7 @@ See `dev/architecture.md` and `dev/project-brief.md` for detailed module respons
 
 ---
 
-_Compliant with all requirements as of Sprint 7 (2025-05-23)._
+_Compliant with all requirements as of Sprint 27 (2025-06-04)._
 
 
 > **CLI tool for cataloging all files and extracting text from PDFs in large folder trees.**

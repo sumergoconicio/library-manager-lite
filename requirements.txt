@@ -1,4 +1,5 @@
 # requirements.txt
+# Sprint 27 — 2025-06-04: Enhanced catalog analysis (T57.1-T57.3). Added file size metrics with 3 decimal precision to folder-level analysis.
 # Sprint 24 — 2025-06-04: SQLite database integration (T54.1–T54.5). Added SQLite as complementary storage format alongside CSV.
 # Sprint 16 — 2025-06-04: Catalog enhancement cascade (T50.1–T50.5). Includes .txt in textracted, PDF–TXT mapping, tokenization, new columns, column order enforcement.
 # Sprint 8 — 2025-06-03: Added transcript archive functionality with CSV tracking.

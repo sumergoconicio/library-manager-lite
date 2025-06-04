@@ -1,10 +1,10 @@
 """
 catalog_analyzer.py | Catalog Analysis Module
-Purpose: Analyze catalog data (from SQLite or CSV) for file/folder/extension/token statistics and output summary as CSV files.
+Purpose: Analyze catalog data from SQLite for file/folder/extension/token statistics and output summary as CSV files.
 Author: ChAI-Engine (chaiji)
 Last-Updated: 2025-06-04
 Non-Std Deps: pandas, sqlite3
-Abstract Spec: Loads catalog data from SQLite (or falls back to CSV), computes summary statistics (files per folder with totals, extensions with totals, textracted files, token counts), outputs tables as separate CSV files (latest-folder-breakdown.csv, latest-extension-breakdown.csv, latest-token-count.csv).
+Abstract Spec: Loads catalog data from SQLite, computes summary statistics (files/textracted/tokens per folder with totals, extensions with totals, textracted files, token counts), outputs tables as separate CSV files (latest-folder-breakdown.csv, latest-extension-breakdown.csv).
 """
 
 import sqlite3
@@ -33,13 +33,13 @@ def load_catalog_from_sqlite(db_path: Path, verbose: bool = False) -> pd.DataFra
 
 def analyze_catalog(output_mode="csv", verbose: bool = False):
     """
-    Purpose: Analyze catalog data (from SQLite or CSV) and output summary tables as separate CSV files.
+    Purpose: Analyze catalog data from SQLite and output summary tables as separate CSV files.
     Inputs: 
         output_mode (str: 'print', 'return', or 'csv')
         verbose (bool): Enable verbose logging
     Outputs: None or dict of tables
     Role: Loads config, resolves catalog path, computes file/folder/ext/token stats with totals, counts textracted files, 
-          writes separate CSV files for folder breakdown, extension breakdown, and token count.
+          writes separate CSV files for folder breakdown and extension breakdown.
     """
     log_event("[INFO] Starting catalog analysis", verbose)
     config_path = Path("user_inputs/folder_paths.json")
@@ -56,37 +56,65 @@ def analyze_catalog(output_mode="csv", verbose: bool = False):
     
     # Define paths for catalog files
     sqlite_path = Path(root_folder) / catalog_folder / "library.sqlite"
-    csv_path = Path(root_folder) / catalog_folder / "latest-catalog.csv"
     
     # Define paths for the separate CSV files
     folder_breakdown_path = Path(root_folder) / catalog_folder / "latest-folder-breakdown.csv"
     extension_breakdown_path = Path(root_folder) / catalog_folder / "latest-extension-breakdown.csv"
-    token_count_path = Path(root_folder) / catalog_folder / "latest-token-count.csv"
     
-    # Try to load from SQLite first, then fall back to CSV if needed
-    df = None
-    if sqlite_path.exists():
-        df = load_catalog_from_sqlite(sqlite_path, verbose)
+    # Load from SQLite database
+    if not sqlite_path.exists():
+        log_event(f"[ERROR] SQLite database not found: {sqlite_path}", verbose)
+        raise FileNotFoundError(f"SQLite database not found: {sqlite_path}")
     
-    # Fall back to CSV if SQLite loading failed
+    df = load_catalog_from_sqlite(sqlite_path, verbose)
     if df is None:
-        if not csv_path.exists():
-            log_event(f"[ERROR] Catalog file not found: {csv_path}", verbose)
-            raise FileNotFoundError(f"Catalog file not found: {csv_path}")
-        df = pd.read_csv(csv_path)
-        log_event(f"[INFO] Loaded catalog data from CSV: {csv_path}", verbose)
+        log_event(f"[ERROR] Failed to load data from SQLite database", verbose)
+        raise RuntimeError("Failed to load data from SQLite database")
     # Check required columns
     required_cols = ["relative_path", "extension"]
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         log_event(f"[ERROR] Missing required columns in catalog: {missing}. Available columns: {list(df.columns)}", verbose)
         raise KeyError(f"Missing required columns in catalog: {missing}. Available columns: {list(df.columns)}")
-    # Count total files per top-level folder
-    df['top_folder'] = df['relative_path'].apply(lambda x: x.split('/')[0] if '/' in x else x)
-    files_per_folder = df.groupby('top_folder').size().reset_index(name='file_count')
-    # Add total row to files_per_folder
-    total_files = files_per_folder['file_count'].sum()
-    files_per_folder.loc[len(files_per_folder)] = ['TOTAL', total_files]
+    
+    # Extract top-level folder from relative_path
+    df['top_folder'] = df['relative_path'].apply(lambda x: Path(x).parts[0] if Path(x).parts else 'unknown')
+    
+    # Ensure textracted column exists and is properly formatted
+    if 'textracted' not in df.columns:
+        df['textracted'] = False
+    else:
+        df['textracted'] = df['textracted'].fillna(False).astype(bool)
+    
+    # Ensure token_count column exists and is properly formatted
+    if 'token_count' not in df.columns:
+        df['token_count'] = 0
+    else:
+        df['token_count'] = pd.to_numeric(df['token_count'], errors='coerce').fillna(0)
+    
+    # Ensure file_size_in_MB column exists and is properly formatted
+    if 'file_size_in_MB' not in df.columns:
+        df['file_size_in_MB'] = 0
+    else:
+        df['file_size_in_MB'] = pd.to_numeric(df['file_size_in_MB'], errors='coerce').fillna(0)
+    
+    # Count files, textracted files, file_size_in_MB, and token count per top-level folder
+    folder_stats = df.groupby('top_folder').agg(
+        file_count=('relative_path', 'count'),
+        textracted_count=('textracted', lambda x: x.sum()),
+        file_size_MB=('file_size_in_MB', 'sum'),
+        token_count=('token_count', 'sum')
+    ).reset_index()
+    
+    # Format file_size_MB to max 3 decimal places
+    folder_stats['file_size_MB'] = folder_stats['file_size_MB'].round(3)
+    
+    # Add total row to folder_stats
+    total_files = folder_stats['file_count'].sum()
+    total_textracted = folder_stats['textracted_count'].sum()
+    total_file_size = round(folder_stats['file_size_MB'].sum(), 3)  # Round total to 3 decimal places
+    total_tokens = folder_stats['token_count'].sum()
+    folder_stats.loc[len(folder_stats)] = ['TOTAL', total_files, total_textracted, total_file_size, total_tokens]
     
     # Count unique extension types
     ext_counts = df['extension'].value_counts().reset_index()
@@ -120,27 +148,19 @@ def analyze_catalog(output_mode="csv", verbose: bool = False):
     
     # Format output as plain text (for backward compatibility)
     summary_lines = []
-    summary_lines.append("Total files per top-level folder:")
-    summary_lines.append(files_per_folder.to_string(index=False))
+    summary_lines.append("Files, textracted files, and token count per top-level folder:")
+    summary_lines.append(folder_stats.to_string(index=False))
     summary_lines.append("\nFile count by extension:")
     summary_lines.append(ext_counts.to_string(index=False))
-    summary_lines.append(f"\nNumber of textracted files: {int(textracted_count)}")
-    
-    # Safely format token count for display
-    try:
-        token_display = token_total_str if 'token_total_str' in locals() else str(token_total)
-        summary_lines.append(f"Total token count: {token_display}")
-    except Exception as e:
-        summary_lines.append(f"Total token count: Error calculating total")
-        log_event(f"[ERROR] Error formatting token count for display: {e}", verbose)
+    summary_lines.append(f"\nNumber of textracted files: {int(total_textracted)}")
+    summary_lines.append(f"Total token count: {int(total_tokens)}")
     
     summary_txt = "\n".join(summary_lines)
     
     # Save to CSV files
-    files_per_folder.to_csv(folder_breakdown_path, index=False)
+    folder_stats.to_csv(folder_breakdown_path, index=False)
     ext_counts.to_csv(extension_breakdown_path, index=False)
-    token_count_df.to_csv(token_count_path, index=False)
-    log_event(f"[INFO] Saved analysis outputs to {folder_breakdown_path}, {extension_breakdown_path}, {token_count_path}", verbose)
+    log_event(f"[INFO] Saved analysis outputs to {folder_breakdown_path}, {extension_breakdown_path}", verbose)
     
     if output_mode == "print":
         log_event(summary_txt, verbose)
@@ -148,15 +168,14 @@ def analyze_catalog(output_mode="csv", verbose: bool = False):
     elif output_mode == "return":
         log_event("[INFO] Returning analysis results as dict", verbose)
         return {
-            "files_per_folder": files_per_folder,
+            "folder_stats": folder_stats,
             "ext_counts": ext_counts,
-            "textracted_count": textracted_count,
-            "token_total": token_total,
+            "textracted_count": total_textracted,
+            "token_total": total_tokens,
             "summary_txt": summary_txt,
             "csv_paths": {
                 "folder_breakdown": str(folder_breakdown_path),
-                "extension_breakdown": str(extension_breakdown_path),
-                "token_count": str(token_count_path)
+                "extension_breakdown": str(extension_breakdown_path)
             }
         }
     # output_mode == 'csv' does not print or return, just writes files
