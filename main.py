@@ -80,6 +80,7 @@ def main():
         --convert: Convert MD files to TXT and extract text from PDFs
         --identify: Run PDF renaming workflow on buffer_folder
         --transcribe: Download transcripts from YouTube videos
+        --search: Search for files by filename in the SQLite database
         --help: Display this help message and exit
     Outputs: None
     Role: Loads config, runs incremental or full catalog workflow per CLI flags, passes flags to modules. 
@@ -97,6 +98,7 @@ def main():
     parser.add_argument("--convert", action="store_true", help="Convert MD files to TXT and extract text from PDFs")
     parser.add_argument("--identify", action="store_true", help="Run PDF renaming workflow on buffer_folder")
     parser.add_argument("--transcribe", action="store_true", help="Download transcripts from YouTube videos")
+    parser.add_argument("--search", action="store_true", help="Search for files by filename in the SQLite database")
     parser.add_argument("--backupdb", action="store_true", help="Create a backup of the SQLite database in the catalog folder")
     parser.add_argument("--help", "-h", action="store_true", help="Display this help message and exit")
     # Add profile selection argument
@@ -149,6 +151,13 @@ def main():
         run_catalog_workflow(profile_config, verbose=args.verbose, tokenize=True, force_new=False, convert=False, backup_db=args.backupdb)
         print("[INFO] Catalog update complete with token counting enabled.")
 
+    def handle_search():
+        from adapters.search_and_retrieve import run_search
+        # Load profile-specific config
+        profile_config = load_profile_config(args=args)
+        # Run the search functionality
+        run_search(profile_config, verbose=args.verbose)
+
     def handle_incremental():
         # Load profile-specific config
         profile_config = load_profile_config(args=args)
@@ -172,6 +181,13 @@ def main():
     elif args.transcribe:
         try:
             handle_transcribe()
+        except Exception as e:
+            print(str(e))
+            sys.exit(1)
+        sys.exit(0)
+    elif args.search:
+        try:
+            handle_search()
         except Exception as e:
             print(str(e))
             sys.exit(1)
