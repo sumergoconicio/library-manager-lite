@@ -9,7 +9,7 @@
         "extract_path": "textracted",
         "_excluded_files_comment": "Optional: defaults to [] if not specified",
         "excluded_files": [".DS_Store", "Thumbs.db"],
-        "_buffer_folder_comment": "Optional: defaults to '' if not specified",
+        "_buffer_folder_comment": "Optional: defaults to '~/Downloads' if not specified",
         "buffer_folder": "/path/to/buffer/folder",
         "_yt_transcripts_folder_comment": "Optional: folder to store YouTube transcripts",
         "yt_transcripts_folder": "YTtranscripts"

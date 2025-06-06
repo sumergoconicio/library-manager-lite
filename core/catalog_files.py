@@ -1,10 +1,10 @@
 """
 core/catalog_files.py | Catalog Management Module
-Purpose: Scan root folder for PDFs and all files, update catalog CSV, trigger extraction as needed, and ensure robust PDF–TXT association. Catalogs and tokenizes all .txt files in any textracted folder. For each PDF, sets textracted=True if a matching .txt exists in any textracted folder under the same top-level directory. Adds last_modified and file_size_in_MB columns to catalog, with file_size_in_MB skipped for textracted files associated with PDF row-items. File size extraction now uses a single robust utility get_file_size_in_mb for all cases. file_size_in_MB values are always rounded to 3 decimal places for precision and consistency.
+Purpose: Scan root folder for PDFs and all files, update catalog CSV, trigger extraction as needed, and ensure robust PDF–TXT association. Catalogs and tokenizes all .txt files in any extract_folder folder. For each PDF, sets textracted=True if a matching .txt exists in any extract_folder folder under the same top-level directory. Adds last_modified and file_size_in_MB columns to catalog, with file_size_in_MB skipped for extract_folder files associated with PDF row-items. File size extraction now uses a single robust utility get_file_size_in_mb for all cases. file_size_in_MB values are always rounded to 3 decimal places for precision and consistency.
 Author: ChAI-Engine (chaiji)
 Last-Updated: 2025-06-03
 Non-Std Deps: pandas, tiktoken
-Abstract Spec: Recursively scan root, catalog all files except system/excluded files. Build a mapping of (top-level, basename) to .txt path for all .txt in textracted folders. For PDFs, set textracted=True if a matching .txt exists. Tokenize all .txt in textracted if tokenize flag is set. Ensure atomic, robust DataFrame updates. Docstrings and file header updated to reflect changes.
+Abstract Spec: Recursively scan root, catalog all files except system/excluded files. Build a mapping of (top-level, basename) to .txt path for all .txt in extract_folder folders. For PDFs, set textracted=True if a matching .txt exists in any extract_folder folders. Tokenize all .txt in extract_folder folders if tokenize flag is set. Ensure atomic, robust DataFrame updates. Docstrings and file header updated to reflect changes.
 """
 
 import os
@@ -48,8 +48,8 @@ def load_config(config_path: Path) -> dict:
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
     root = Path(config['root_folder_path'])
-    catalog_folder = config.get('catalog_folder', '_catalog')
-    extract_path = config.get('extract_path', 'textracted')
+    catalog_folder = Path(config['catalog_folder'])
+    extract_path = config.get('extract_path', 'PDFextracts')
     excluded_files = set(config.get('excluded_files', []))
     return {
         'root': root,
@@ -83,7 +83,7 @@ def load_or_init_catalog(root: Path, catalog_folder: str) -> pd.DataFrame:
     Outputs: catalog (pd.DataFrame)
     Role: Ensures catalog is always available for update.
     """
-    catalog_dir = root / catalog_folder
+    catalog_dir = catalog_folder
     catalog_dir.mkdir(parents=True, exist_ok=True)
     catalog_path = catalog_dir / 'latest-catalog.csv'
     if catalog_path.exists():
@@ -125,7 +125,7 @@ def scan_and_update_catalog(
         excluded_files = set()
     records = []
 
-    # --- Step 1: Build mapping of all .txt in any textracted folder ---
+    # --- Step 1: Build mapping of all .txt in any extract_folder folders ---
     txt_mapping = {}  # (top_level, basename) -> txt_path
     for dirpath, dirs, files in os.walk(root):
         if os.path.basename(dirpath) == extract_folder:
@@ -145,11 +145,11 @@ def scan_and_update_catalog(
         for f in files:
             abs_file_path = Path(dirpath) / f
             log_event(f"[SCAN] Considering file: {abs_file_path} (ext: {os.path.splitext(f)[1]})", verbose)
-            # Extra: log if .txt in any textracted folder
+            # Extra: log if .txt in any extract_folder folder
             if os.path.splitext(f)[1].lower() == '.txt' and (
                 extract_folder in Path(dirpath).parts or Path(dirpath).name == extract_folder
             ):
-                log_event(f"[DEBUG] Found TXT in textracted: {abs_file_path} (rel_dir={os.path.relpath(dirpath, root)})", verbose)
+                log_event(f"[DEBUG] Found TXT in {extract_folder}: {abs_file_path} (rel_dir={os.path.relpath(dirpath, root)})", verbose)
 
             if f in EXCLUDED_FILES:
                 log_event(f"File skipped (excluded): {abs_file_path}", verbose)
@@ -195,7 +195,7 @@ def scan_and_update_catalog(
                         except Exception as e:
                             log_event(f"[ERROR] Failed to extract PDF: {abs_file_path}: {e}", verbose)
 
-            # --- NEW: Catalog .txt files in textracted folders ---
+            # --- NEW: Catalog .txt files in extract_folder folders ---
             in_textracted = (
                 extract_folder in Path(dirpath).parts or Path(dirpath).name == extract_folder
             )
@@ -209,7 +209,7 @@ def scan_and_update_catalog(
             # Calculate file_size_in_MB for all files by default
             file_size_in_MB = get_file_size_in_mb(abs_file_path)
 
-            # Always catalog .txt files in any textracted folder (including root/textracted)
+            # Always catalog .txt files in any extract_folder folder (including root/extract_folder)
             if extension.lower() == 'txt' and in_textracted:
                 rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
                 if rel_dir == extract_folder:
@@ -259,9 +259,9 @@ def scan_and_update_catalog(
             rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
             top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
             if extension.lower() == 'pdf':
-                # If PDF is in root, look for .txt in ('textracted', name)
+                # If PDF is in root, look for .txt in (extract_folder, name)
                 if rel_dir == '.':
-                    key = ('textracted', name)
+                    key = (extract_folder, name)
                 else:
                     key = (top_level, name)
                 if key in txt_mapping:
@@ -280,7 +280,7 @@ def scan_and_update_catalog(
                             record['token_count'] = ''
                             log_event(f"[ERROR] Associated TXT file does not exist: {txt_path}", verbose)
 
-            # --- TXT in textracted: always catalog, always tokenize if flag set ---
+            # --- TXT in extract_folder: always catalog, always tokenize if flag set ---
             if extension.lower() == 'txt':
                 if tokenize:
                     log_event(f"[DEBUG] About to count tokens for TXT: {abs_file_path}", verbose)
@@ -366,12 +366,12 @@ def run_catalog_workflow(profile_config: dict, verbose: bool = False, tokenize: 
     from core.log_utils import set_log_path
     # Extract all relevant paths from profile
     root = Path(profile_config['root_folder_path'])
-    catalog_folder = profile_config['catalog_folder']
+    catalog_folder = Path(profile_config['catalog_folder'])
     extract_path = profile_config['extract_path']
     buffer_folder = profile_config.get('buffer_folder', '')
     yt_transcripts_folder = profile_config.get('yt_transcripts_folder', '')
     excluded_files = set(profile_config.get('excluded_files', []))
-    log_path = root / catalog_folder / 'logs.txt'
+    log_path = catalog_folder / 'logs.txt'
     set_log_path(str(log_path))
     
     # Create config dict in the format expected by other functions
@@ -382,7 +382,7 @@ def run_catalog_workflow(profile_config: dict, verbose: bool = False, tokenize: 
         'excluded_files': excluded_files
     }
     
-    catalog_dir = root / catalog_folder
+    catalog_dir = catalog_folder
     catalog_path = catalog_dir / 'latest-catalog.csv'
     if force_new:
         # Always create a new empty DataFrame

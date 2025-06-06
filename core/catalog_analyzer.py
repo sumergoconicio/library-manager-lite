@@ -51,19 +51,15 @@ def analyze_catalog(output_mode="csv", verbose: bool = False, concise: bool = Tr
         profile_config = load_profile_config()
         log_event(f"[INFO] Loaded profile config from file: {profile_config.get('_profile_name', 'unknown')}", verbose)
     
-    root_folder = profile_config.get("root_folder_path")
     catalog_folder = profile_config.get("catalog_folder", "_catalog")
-    if not root_folder:
-        log_event("[ERROR] root_folder_path must be set in the profile configuration", verbose)
-        raise ValueError("root_folder_path must be set in the profile configuration")
     
     # Define paths for catalog files
-    sqlite_path = Path(root_folder) / catalog_folder / "library.sqlite"
+    sqlite_path = Path(catalog_folder) / "library.sqlite"
     
     # Define paths for the separate CSV files
-    folder_breakdown_path = Path(root_folder) / catalog_folder / "latest-folder-breakdown.csv"
-    extension_breakdown_path = Path(root_folder) / catalog_folder / "latest-extension-breakdown.csv"
-    folder_breadcrumbs_path = Path(root_folder) / catalog_folder / "latest-folder-breadcrumbs.csv"
+    folder_breakdown_path = Path(catalog_folder) / "latest-folder-breakdown.csv"
+    extension_breakdown_path = Path(catalog_folder) / "latest-extension-breakdown.csv"
+    folder_breadcrumbs_path = Path(catalog_folder) / "latest-folder-breadcrumbs.csv"
     
     # Load from SQLite database
     if not sqlite_path.exists():

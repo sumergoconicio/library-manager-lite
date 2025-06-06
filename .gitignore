@@ -5,6 +5,7 @@ sandbox/
 #adapters
 #ports
 user_inputs/folder_paths.json
+user_inputs/yt_cookie.txt
 core/logs.txt
 core/__pycache__
 .windsurf

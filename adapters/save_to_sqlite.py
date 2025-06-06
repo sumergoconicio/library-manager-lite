@@ -37,7 +37,7 @@ def save_dataframe_to_sqlite(
     Outputs: None
     Role: Persists catalog data in SQLite format for querying and analysis
     """
-    catalog_dir = root / catalog_folder
+    catalog_dir = catalog_folder
     catalog_dir.mkdir(parents=True, exist_ok=True)
     db_path = catalog_dir / 'library.sqlite'
     

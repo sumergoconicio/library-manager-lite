@@ -193,7 +193,7 @@ def process_transcript_request(config: dict, verbose: bool = False) -> None:
         raise KeyError("catalog_folder not found in configuration")
         
     transcript_folder = Path(config["yt_transcripts_folder"])
-    catalog_folder = Path(config["root_folder_path"]) / config["catalog_folder"]
+    catalog_folder = Path(config["catalog_folder"])
     
     # Create catalog folder if it doesn't exist
     os.makedirs(catalog_folder, exist_ok=True)
