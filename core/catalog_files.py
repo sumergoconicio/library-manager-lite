@@ -280,19 +280,32 @@ def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose
 
 from core.log_utils import log_event
 
-def run_catalog_workflow(config_path: Path, verbose: bool = False, tokenize: bool = False, force_new: bool = False, convert: bool = False, backup_db: bool = False):
+def run_catalog_workflow(profile_config: dict, verbose: bool = False, tokenize: bool = False, force_new: bool = False, convert: bool = False, backup_db: bool = False):
     """
     Purpose: Main entry for catalog management and extraction.
-    Inputs: config_path (Path), verbose (bool), tokenize (bool), force_new (bool), convert (bool), backup_db (bool)
+    Inputs: profile_config (dict), verbose (bool), tokenize (bool), force_new (bool), convert (bool), backup_db (bool)
     Outputs: None
-    Role: Loads config, manages catalog, triggers extraction. All logging is handled via log_utils.py.
+    Role: Uses provided profile config, manages catalog, triggers extraction. All logging is handled via log_utils.py.
     Tokenization is only performed if tokenize=True.
     Text extraction and conversion only occur if convert=True.
     If force_new is True, always create a new catalog from scratch.
     If backup_db is True, create a backup of the SQLite database.
     """
-    config = load_config(config_path)
-    catalog_dir = config['root'] / config['catalog_folder']
+    # Process the profile config
+    root = Path(profile_config['root_folder_path'])
+    catalog_folder = profile_config.get('catalog_folder', '_catalog')
+    extract_path = profile_config.get('extract_path', 'textracted')
+    excluded_files = set(profile_config.get('excluded_files', []))
+    
+    # Create config dict in the format expected by other functions
+    config = {
+        'root': root,
+        'catalog_folder': catalog_folder,
+        'extract_path': extract_path,
+        'excluded_files': excluded_files
+    }
+    
+    catalog_dir = root / catalog_folder
     catalog_path = catalog_dir / 'latest-catalog.csv'
     if force_new:
         # Always create a new empty DataFrame
@@ -300,9 +313,9 @@ def run_catalog_workflow(config_path: Path, verbose: bool = False, tokenize: boo
         catalog = pd.DataFrame(columns=cols)
         log_event(f"[INFO] Creating new catalog from scratch at {catalog_path}", verbose)
     else:
-        catalog = load_or_init_catalog(config['root'], config['catalog_folder'])
+        catalog = load_or_init_catalog(root, catalog_folder)
         log_event(f"CSV found at {catalog_path}", verbose)
     catalog = scan_and_update_catalog(
-        config['root'], config['extract_path'], catalog, config.get('excluded_files', set()), verbose=verbose, tokenize=tokenize, convert=convert
+        root, extract_path, catalog, excluded_files, verbose=verbose, tokenize=tokenize, convert=convert
     )
-    save_catalog(catalog, config['root'], config['catalog_folder'], verbose=verbose, backup_db=backup_db)
+    save_catalog(catalog, root, catalog_folder, verbose=verbose, backup_db=backup_db)

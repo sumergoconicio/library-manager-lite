@@ -34,15 +34,40 @@ python main.py [--recatalog] [--analysis] [--verbose] [--tokenize] [--identify] 
 - `--identify`: Rename PDFs in buffer_folder using LLM
 - `--transcribe`: Download transcripts from YouTube videos/playlists, convert VTT to TXT, and automatically run incremental catalog update with token counting enabled
 - `--backupdb`: Create a timestamped backup of the SQLite database after saving the catalog
+- `--profile`: Select library profile to use (from folder_paths.json)
 
 ## Configuration
-Edit `user_inputs/folder-paths.json` to set:
-- `root_folder_path`
+### Library Profiles
+Edit `user_inputs/folder_paths.json` to set multiple library profiles. Each profile is a top-level key with its own configuration:
+
+```json
+{
+  "hoard": {
+    "root_folder_path": "/path/to/main/library",
+    "catalog_folder": "_catalog",
+    ...
+  },
+  "sandbox": {
+    "root_folder_path": "/path/to/test/library",
+    "catalog_folder": "_catalog",
+    ...
+  }
+}
+```
+
+Each profile contains:
+- `root_folder_path`: Absolute path to your files
 - `catalog_folder` (default: _catalog)
-- `extract_folder` (default: textracted)
+- `extract_path` (default: textracted)
 - `excluded_files` (list of files/folders to skip)
 - `buffer_folder` (folder containing PDFs to rename)
 - `yt_transcripts_folder` (folder to save YouTube transcripts)
+
+### Profile Selection
+Select a profile using one of these methods (in order of precedence):
+1. CLI argument: `--profile sandbox`
+2. Environment variable: Set `DEFAULT_LIBRARY_PROFILE=hoard` in `.env`
+3. Default: Uses the first profile found in the config file
 
 Edit `user_inputs/llm_config.json` to configure LLM providers for different workflows:
 - `workflows`: Map workflow names to provider/model configurations
@@ -68,14 +93,22 @@ Set these in your environment or in a `.env` file in the project root:
 - API keys for LLM providers as specified in `user_inputs/llm_config.json`
   - Example: `ANTHROPIC_API_KEY=your_api_key_here`
   - Example: `OPENAI_API_KEY=your_api_key_here`
+- `DEFAULT_LIBRARY_PROFILE`: Profile to use from folder_paths.json if not specified via CLI
+  - Example: `DEFAULT_LIBRARY_PROFILE=hoard`
 - See `user_inputs/llm_provider_usage.md` for more details
 
 ## Project Structure
+- `main.py`: CLI entry point, workflow orchestration
+- `core/`: Business logic (catalog management, text extraction, token counting)
+- `ports/`: Interface adapters (format conversions, profile loading)
+- `adapters/`: External service implementations (LLM providers, SQLite, YouTube)
+- `user_inputs/`: Configuration files (folder paths, LLM settings)
+
 See `dev/architecture.md` and `dev/project-brief.md` for detailed module responsibilities and data flow.
 
 ---
 
-_Compliant with all requirements as of Sprint 27 (2025-06-04)._
+_Compliant with all requirements as of Sprint 28 (2025-06-06)._
 
 
 > **CLI tool for cataloging all files and extracting text from PDFs in large folder trees.**

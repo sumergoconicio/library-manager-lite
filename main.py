@@ -15,6 +15,7 @@ import argparse
 import json
 import sys
 import litellm
+from ports.profile_loader import load_profile_config, add_profile_arg
 
 # Enable LiteLLM debug logging for troubleshooting provider/model issues
 #try:
@@ -98,14 +99,17 @@ def main():
     parser.add_argument("--transcribe", action="store_true", help="Download transcripts from YouTube videos")
     parser.add_argument("--backupdb", action="store_true", help="Create a backup of the SQLite database in the catalog folder")
     parser.add_argument("--help", "-h", action="store_true", help="Display this help message and exit")
+    # Add profile selection argument
+    add_profile_arg(parser)
 
     args = parser.parse_args()
 
     # Dispatch table for CLI actions
     def handle_recatalog():
-        config_path = Path("user_inputs/folder_paths.json")
+        # Load profile-specific config
+        profile_config = load_profile_config(args=args)
         # When --recatalog is used, convert and tokenize are implicitly True
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=True, convert=True, backup_db=args.backupdb)
+        run_catalog_workflow(profile_config, verbose=args.verbose, tokenize=True, force_new=True, convert=True, backup_db=args.backupdb)
         # Run analysis by default after recataloging
         handle_analysis()
 
@@ -121,8 +125,11 @@ def main():
     def handle_identify():
         from core.PDF_renamer import process_pdf_directory
         from adapters.llm_provider import get_llm_provider
-        config = load_config("user_inputs/folder_paths.json", required_keys=["buffer_folder"])
-        buffer_folder = config["buffer_folder"]
+        # Load profile-specific config
+        profile_config = load_profile_config(args=args)
+        if "buffer_folder" not in profile_config:
+            raise KeyError(f"[ERROR] Required key 'buffer_folder' not found in selected profile")
+        buffer_folder = profile_config["buffer_folder"]
         prompt = load_prompt("ports/llm_title_guesser.txt")
         # Use the workflow-specific LLM provider for identification
         llm = get_llm_provider(workflow="identify")
@@ -130,18 +137,21 @@ def main():
 
     def handle_transcribe():
         from adapters.yt_transcriber import process_transcript_request
-        config = load_config("user_inputs/folder_paths.json", required_keys=["yt_transcripts_folder"])
-        process_transcript_request(config, verbose=args.verbose)
+        # Load profile-specific config
+        profile_config = load_profile_config(args=args)
+        if "yt_transcripts_folder" not in profile_config:
+            raise KeyError(f"[ERROR] Required key 'yt_transcripts_folder' not found in selected profile")
+        process_transcript_request(profile_config, verbose=args.verbose)
         # Run incremental catalog update after transcription with tokenize=True
         print("[INFO] Running incremental catalog update to include new transcript files...")
-        config_path = Path("user_inputs/folder_paths.json")
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=False, backup_db=args.backupdb)
+        run_catalog_workflow(profile_config, verbose=args.verbose, tokenize=True, force_new=False, convert=False, backup_db=args.backupdb)
         print("[INFO] Catalog update complete with token counting enabled.")
 
     def handle_incremental():
-        config_path = Path("user_inputs/folder_paths.json")
+        # Load profile-specific config
+        profile_config = load_profile_config(args=args)
         # Always enable convert and tokenize for incremental updates
-        run_catalog_workflow(config_path, verbose=args.verbose, tokenize=True, force_new=False, convert=True, backup_db=args.backupdb)
+        run_catalog_workflow(profile_config, verbose=args.verbose, tokenize=True, force_new=False, convert=True, backup_db=args.backupdb)
         # Run analysis by default after incremental update
         handle_analysis()
 

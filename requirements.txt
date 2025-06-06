@@ -1,4 +1,5 @@
 # requirements.txt
+# Sprint 28 — 2025-06-06: Library profile selection system (T58.1-T58.5). Added multi-profile support for library configurations.
 # Sprint 27 — 2025-06-04: Enhanced catalog analysis (T57.1-T57.3). Added file size metrics with 3 decimal precision to folder-level analysis.
 # Sprint 24 — 2025-06-04: SQLite database integration (T54.1–T54.5). Added SQLite as complementary storage format alongside CSV.
 # Sprint 16 — 2025-06-04: Catalog enhancement cascade (T50.1–T50.5). Includes .txt in textracted, PDF–TXT mapping, tokenization, new columns, column order enforcement.
@@ -12,6 +13,7 @@ pandas==2.2.2      # DataFrame/catalog handling
 litellm==1.27.6
 PyMuPDF==1.22.5    # PDF processing
 yt-dlp==2023.11.16 # YouTube transcript downloading
+python-dotenv==1.0.0 # Environment variable loading
 
 # Testing
 pytest==8.2.0      # Unit testing

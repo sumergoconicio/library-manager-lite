@@ -1,14 +1,26 @@
 {
-    "_comment": "Example configuration file. Copy this to folder-paths.json and update the paths.",
-    "root_folder_path": "/path/to/your/pdfs",
-    "_catalog_comment": "Optional: defaults to '_catalog' if not specified",
-    "catalog_folder": "_catalog",
-    "_extract_path_comment": "Optional: defaults to 'textracted' if not specified",
-    "extract_path": "textracted",
-    "_excluded_files_comment": "Optional: defaults to [] if not specified",
-    "excluded_files": [".DS_Store", "Thumbs.db"],
-    "_buffer_folder_comment": "Optional: defaults to '' if not specified",
-    "buffer_folder": "",
-    "_yt_transcripts_folder_comment": "Optional: folder to store YouTube transcripts",
-    "yt_transcripts_folder": "YTtranscripts"
+    "_comment": "Example configuration file with multiple profiles. Copy this to folder_paths.json and update the paths.",
+    "default": {
+        "_comment": "Default profile for your main library",
+        "root_folder_path": "/path/to/your/main/library",
+        "_catalog_comment": "Optional: defaults to '_catalog' if not specified",
+        "catalog_folder": "_catalog",
+        "_extract_path_comment": "Optional: defaults to 'textracted' if not specified",
+        "extract_path": "textracted",
+        "_excluded_files_comment": "Optional: defaults to [] if not specified",
+        "excluded_files": [".DS_Store", "Thumbs.db"],
+        "_buffer_folder_comment": "Optional: defaults to '' if not specified",
+        "buffer_folder": "/path/to/buffer/folder",
+        "_yt_transcripts_folder_comment": "Optional: folder to store YouTube transcripts",
+        "yt_transcripts_folder": "YTtranscripts"
+    },
+    "test": {
+        "_comment": "Secondary profile for testing or development",
+        "root_folder_path": "/path/to/your/test/library",
+        "catalog_folder": "_catalog",
+        "extract_path": "textracted",
+        "excluded_files": [".DS_Store", "Thumbs.db"],
+        "buffer_folder": "/path/to/test/buffer",
+        "yt_transcripts_folder": "test_transcripts"
+    }
 }
