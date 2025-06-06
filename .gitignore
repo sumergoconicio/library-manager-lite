@@ -10,3 +10,4 @@ core/logs.txt
 core/__pycache__
 .windsurf
 .pytest_cache
+**/__pycache__
