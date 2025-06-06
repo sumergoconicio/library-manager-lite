@@ -2,205 +2,113 @@
 
 **Bulk PDF Text Extraction & Cataloguing Tool**
 
+---
+
 ## Overview
-Library Manager Lite is a modular, auditable tool for extracting text from PDFs, cataloguing files, counting tokens in TXT files, analyzing file collections, and downloading YouTube transcripts. Designed for reproducibility and compliance with project rules.
+Library Manager Lite is a modular, standards-driven CLI tool for:
+- Extracting text from PDFs
+- Cataloguing and analyzing all files in a directory tree
+- Counting tokens in TXT files
+- Downloading and archiving YouTube transcripts
+- Maintaining robust, auditable inventories (CSV & SQLite)
+
+Designed for reproducibility, compliance, and ease of automation.
+
+---
 
 ## Features
 - Bulk PDF text extraction (PyMuPDF)
 - Incremental cataloguing (CSV and SQLite)
-- Token counting for TXT files using heuristic estimation
-- MD to TXT conversion
-- VTT subtitle to TXT conversion
+- Token counting for TXT files
+- MD/VTT to TXT conversion
 - Exclusion logic via config
-- Unified logging with verbose mode
-- CLI flags for all major workflows
-- Comprehensive catalog analysis with folder-level and extension-level breakdowns
-- File size tracking and analysis with precise formatting
-- YouTube transcript downloading with automatic VTT to TXT conversion
-- SQLite database integration for robust data storage and querying
+- Unified logging (with verbose mode)
+- CLI flags for all workflows
+- Comprehensive catalog analysis
+- File size tracking and breakdowns
+- YouTube transcript downloading (with VTT to TXT conversion)
+- Automatic database backups
 
-## Usage
-Run from the command line:
+---
 
-```sh
-python main.py [--recatalog] [--analysis] [--verbose] [--tokenize] [--identify] [--transcribe] [--backupdb]
-```
+## Quick Start
 
-- `--recatalog`: Regenerate catalog from scratch (automatically includes text conversion and tokenization)
-- `--analysis`: Output summary analysis to latest-breakdown.txt
-- `--verbose`: Log every process iteration
-- `--tokenize`: Count tokens in TXT files and add to catalog
-- `--convert`: Convert PDFs to TXT, MD files to TXT, and VTT files to TXT
-- `--identify`: Rename PDFs in buffer_folder using LLM
-- `--transcribe`: Download transcripts from YouTube videos/playlists, convert VTT to TXT, and automatically run incremental catalog update with token counting enabled
-- `--backupdb`: Create a timestamped backup of the SQLite database after saving the catalog
-- `--profile`: Select library profile to use (from folder_paths.json)
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **Configure folders:**
+   - Edit `user_inputs/folder_paths.json` (see below)
+3. **Run the CLI:**
+   ```bash
+   python main.py [flags]
+   ```
+
+---
 
 ## Configuration
-### Library Profiles
-Edit `user_inputs/folder_paths.json` to set multiple library profiles. Each profile is a top-level key with its own configuration:
+- Edit `user_inputs/folder_paths.json` to define one or more library profiles (see example below).
+- Each profile includes:
+  - `root_folder_path`: Absolute path to your files
+  - `catalog_folder`: (optional, default: `_catalog`)
+  - `extract_path`: (optional, default: `textracted`)
+  - `excluded_files`: (optional) List of files/folders to skip (folders must end with `/`)
+  - `buffer_folder`: (optional) PDFs to rename
+  - `yt_transcripts_folder`: (optional) Save YouTube transcripts
 
+**Profile selection precedence:**
+1. CLI: `--profile <name>`
+2. `.env`: `DEFAULT_LIBRARY_PROFILE=<name>`
+3. Default: first profile in config
+
+**Example `folder_paths.json`:**
 ```json
 {
-  "hoard": {
-    "root_folder_path": "/path/to/main/library",
-    "catalog_folder": "_catalog",
-    ...
-  },
   "sandbox": {
-    "root_folder_path": "/path/to/test/library",
+    "root_folder_path": "/path/to/files",
     "catalog_folder": "_catalog",
-    ...
+    "extract_path": "textracted",
+    "excluded_files": ["Web-Docs/", "README.md"],
+    "buffer_folder": "/path/to/buffer",
+    "yt_transcripts_folder": "/path/to/transcripts"
   }
 }
 ```
 
-Each profile contains:
-- `root_folder_path`: Absolute path to your files
-- `catalog_folder` (default: _catalog)
-- `extract_path` (default: textracted)
-- `excluded_files` (list of files/folders to skip)
-- `buffer_folder` (folder containing PDFs to rename)
-- `yt_transcripts_folder` (folder to save YouTube transcripts)
-
-### Profile Selection
-Select a profile using one of these methods (in order of precedence):
-1. CLI argument: `--profile sandbox`
-2. Environment variable: Set `DEFAULT_LIBRARY_PROFILE=hoard` in `.env`
-3. Default: Uses the first profile found in the config file
-
-Edit `user_inputs/llm_config.json` to configure LLM providers for different workflows:
-- `workflows`: Map workflow names to provider/model configurations
-- `defaults`: Default provider/model configuration
-
-## Outputs
-- `latest-catalog.csv`: Catalog of all files (CSV format)
-- `library.sqlite`: Catalog database (SQLite format) with indexed columns for efficient querying
-- `latest-folder-breakdown.csv`: Folder-level analysis with file counts, textracted counts, file sizes (MB with 3 decimal precision), and token counts
-- `latest-extension-breakdown.csv`: Extension-type analysis with file counts per extension
-- `logs.txt`: Process log (if verbose)
-
-## Requirements
-- Python 3.10+
-- pandas==2.2.2
-- PyMuPDF==1.22.5
-- litellm==1.27.6
-- yt-dlp==2023.11.16
-- pytest==8.2.0 (testing)
-
-## Environment Variables
-Set these in your environment or in a `.env` file in the project root:
-- API keys for LLM providers as specified in `user_inputs/llm_config.json`
-  - Example: `ANTHROPIC_API_KEY=your_api_key_here`
-  - Example: `OPENAI_API_KEY=your_api_key_here`
-- `DEFAULT_LIBRARY_PROFILE`: Profile to use from folder_paths.json if not specified via CLI
-  - Example: `DEFAULT_LIBRARY_PROFILE=hoard`
-- See `user_inputs/llm_provider_usage.md` for more details
-
-## Project Structure
-- `main.py`: CLI entry point, workflow orchestration
-- `core/`: Business logic (catalog management, text extraction, token counting)
-- `ports/`: Interface adapters (format conversions, profile loading)
-- `adapters/`: External service implementations (LLM providers, SQLite, YouTube)
-- `user_inputs/`: Configuration files (folder paths, LLM settings)
-
-See `dev/architecture.md` and `dev/project-brief.md` for detailed module responsibilities and data flow.
-
----
-
-_Compliant with all requirements as of Sprint 28 (2025-06-06)._
-
-
-> **CLI tool for cataloging all files and extracting text from PDFs in large folder trees.**
-
----
-
-## Features
-
-- 📁 Catalogs **all files** (not just PDFs) into a robust CSV inventory (excluding .txt files in `textracted` folders)
-- 🗂️ **Skips system files** (e.g. .DS_Store, Thumbs.db)
-- 📄 **Extracts text from PDFs** to a single `textracted` folder per first-level directory
-- 📝 Maintains an up-to-date, auditable catalog for downstream workflows
-- 🧩 Modular, standards-driven Python codebase (Hexagonal Architecture)
-- ⚡ Fast, idempotent, and CLI-first (no interactive prompts)
-- 📺 Downloads transcripts from YouTube videos and playlists
-
----
-
-## Getting Started
-
-### Prerequisites
-- Python 3.9+
-- Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-### Configuration
-- Edit `user_inputs/folder_paths.json`:
-  - `root_folder_path`: Absolute path to your files
-  - `catalog_folder`: (optional) Subfolder for catalog CSV (default: `_catalog`)
-  - `extract_path`: (optional) Name for extraction folders (default: `textracted`)
-  - `excluded_files`: (optional) List of files or folders to skip during cataloging. Folders must end with `/` (e.g., `Web-Docs/`).
-  - `buffer_folder`: (optional) Folder containing PDFs to rename
-  - `yt_transcripts_folder`: (optional) Folder to save YouTube transcripts
-
-### Example `folder_paths.json`
-```json
-{
-  "root_folder_path": "/path/to/your/files",
-  "catalog_folder": "_catalog",
-  "extract_path": "textracted",
-  "excluded_files": ["Web-Docs/", "README.md"],
-  "buffer_folder": "/path/to/buffer",
-  "yt_transcripts_folder": "/path/to/transcripts"
-}
-```
+- Configure LLM providers in `user_inputs/llm_config.json` (see that file for details).
 
 ---
 
 ## Usage
 
-From the project root:
-
-```bash
-python main.py
-```
-
----
-
-### CLI Flag Stacking and Precedence (2025-05-25)
+### CLI Flags
+| Flag          | Description                                                                 |
+|---------------|-----------------------------------------------------------------------------|
+| --recatalog   | Full catalog rebuild (includes text conversion and tokenization)            |
+| --analysis    | Output summary analysis to latest-breakdown.txt                             |
+| --verbose     | Log every process iteration                                                 |
+| --tokenize    | Count tokens in TXT files and add to catalog                                |
+| --convert     | Convert PDFs to TXT, MD files to TXT, and VTT files to TXT                  |
+| --identify    | Rename PDFs in buffer_folder using LLM                                      |
+| --transcribe  | Download YouTube transcripts, convert VTT to TXT, update catalog            |
+| --backupdb    | Create timestamped backup of the SQLite database                            |
+| --profile     | Select library profile to use (from folder_paths.json)                      |
 
 - Only one main operation runs per invocation: `--identify`, `--recatalog`, `--analysis`, `--transcribe`, or (default) incremental update.
-- Modifier flags (`--convert`, `--tokenize`, `--verbose`) stack and modify the main operation.
+- Modifier flags (`--convert`, `--tokenize`, `--verbose`) can be combined with any main operation.
 - If multiple main-operation flags are passed, the first matched in priority order is executed: `--identify` > `--transcribe` > `--recatalog` > `--analysis` > default.
-- Mutually exclusive flags are not enforced by argparse; user should avoid passing conflicting main-operation flags.
-
-#### Scenario Table
-
-| Scenario                         | Catalog Mode      | Extraction/Convert | Tokenize | Verbose | Notes                                 |
-|-----------------------------------|-------------------|--------------------|----------|---------|---------------------------------------|
-| (1) No flags                     | Incremental       | No                 | No       | No      | Only new files catalogued             |
-| (2) --recatalog                    | Full rebuild      | Yes                | Yes      | No      | Catalog replaced, convert & tokenize implied |
-| (3) --recatalog --convert --tokenize| Full rebuild      | Yes                | Yes      | No      | All features active                   |
-| (4) --convert --verbose          | Incremental       | Yes                | No       | Yes     | Extraction + logging, no token count  |
-
-> **Note:** If you pass multiple main-operation flags (e.g., `--recatalog --analysis`), only the first in priority order will run. Modifiers can be freely combined with any main operation.
+- Mutually exclusive flags are not enforced by argparse; avoid passing conflicting main-operation flags.
 
 ---
 
-- Scans all subfolders of `root_folder_path`
-- Catalogs every file (except system files, excluded files/folders, and .txt files in `textracted` folders) in a CSV
-- For each PDF, extracts text to the correct `textracted` folder
-- Updates the catalog with extraction status (flagged True if corresponding .txt exists in `textracted`)
-- Renames PDFs in `buffer_folder` using LLM (if `--identify` flag is used)
+## Outputs
+- `latest-catalog.csv`: Catalog of all files (CSV format)
+- `library.sqlite`: Catalog database (SQLite format)
+- `latest-folder-breakdown.csv`: Folder-level analysis
+- `latest-extension-breakdown.csv`: Extension-type analysis
+- `logs.txt`: Process log (if verbose)
 
----
-
-## Exclusion Logic
-
-- You can exclude files or folders from cataloging by listing them in `excluded_files` in your config.
+**Catalog columns (strict order):**
 - Folders to be excluded must end with a `/` (e.g., `Web-Docs/`).
 - Any file or folder matching an entry in `excluded_files` will be skipped during catalog generation and extraction.
 

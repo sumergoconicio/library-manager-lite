@@ -7,7 +7,8 @@ sandbox/
 user_inputs/folder_paths.json
 user_inputs/yt_cookie.txt
 core/logs.txt
-core/__pycache__
 .windsurf
 .pytest_cache
 **/__pycache__
+__pycache__/
+**.DS_Store
