@@ -1,0 +1,19 @@
+# Example YouTube Cookies File (Netscape HTTP Cookie File Format)
+#
+# To download transcripts from private or restricted YouTube videos, you must supply your own cookies file in this folder.
+#
+# 1. Use the "Get cookies.txt locally" browser extension for Chrome or Firefox:
+#    - Chrome: https://chrome.google.com/webstore/detail/get-cookiestxt-local/hnmpcagpplmpfojmgmnngilcnanddlhb
+#    - Firefox: https://addons.mozilla.org/en-US/firefox/addon/get-cookies-txt/
+# 2. Export your YouTube cookies as a Netscape-format file.
+# 3. Save the exported file as:
+#      yt_cookie.txt
+#    (exactly, in this user_inputs/ folder)
+#
+# The script will only work if the file is named yt_cookie.txt (not .json, not .csv, not .example.txt).
+#
+# This file is only an example and will not work for authentication. Replace it with your real exported cookies.
+#
+# Format Example:
+# .youtube.com	TRUE	/	FALSE	2145916800	SID	YOUR_SESSION_ID_HERE
+# .youtube.com	TRUE	/	FALSE	2145916800	HSID	YOUR_SESSION_ID_HERE
