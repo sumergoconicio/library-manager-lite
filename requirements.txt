@@ -10,7 +10,7 @@
 # Python 3.10+ assumed.
 
 # Core dependencies
-pandas==2.2.2      # DataFrame/catalog handling
+pandas==2.2.2      # DataFrame/catalog handling and CSV export for search results
 litellm==1.27.6     # for API calls to LLM providers
 PyMuPDF==1.22.5    # PDF processing
 yt-dlp==2023.11.16 # YouTube transcript downloading

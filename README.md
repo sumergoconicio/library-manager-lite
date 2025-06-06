@@ -51,10 +51,11 @@ Designed for reproducibility, compliance, and ease of automation.
 - Each profile includes:
   - `root_folder_path`: Absolute path to your files
   - `catalog_folder`: (optional, default: `_catalog`)
-  - `extract_path`: (optional, default: `textracted`)
+  - `extract_path`: (optional, default: `PDFextracts`)
   - `excluded_files`: (optional) List of files/folders to skip (folders must end with `/`)
   - `buffer_folder`: (optional) PDFs to rename
-  - `yt_transcripts_folder`: (optional) Save YouTube transcripts
+  - `saved_searches_folder`: (optional, default: `SavedSearches`) Save search results
+  - `yt_transcripts_folder`: (optional, default: `YTtranscripts`) Save YouTube transcripts
 
 **Profile selection precedence:**
 1. CLI: `--profile <name>`
@@ -84,6 +85,7 @@ Designed for reproducibility, compliance, and ease of automation.
 ### CLI Flags
 | Flag          | Description                                                                 |
 |---------------|-----------------------------------------------------------------------------|
+| --search      | Search filenames in the SQLite database; supports multi-term queries (semicolon-separated) |
 | --recatalog   | Full catalog rebuild (includes text conversion and tokenization)            |
 | --analysis    | Output summary analysis to latest-breakdown.txt                             |
 | --verbose     | Log every process iteration                                                 |
@@ -107,6 +109,7 @@ Designed for reproducibility, compliance, and ease of automation.
 - `latest-folder-breakdown.csv`: Folder-level analysis
 - `latest-extension-breakdown.csv`: Extension-type analysis
 - `logs.txt`: Process log (if verbose)
+- `SavedSearches/YYYYMMDDHHmmss_searchterm1_searchterm2.csv`: Search results export for multi-term queries (semicolon-separated, OR logic)
 
 **Catalog columns (strict order):**
 - Folders to be excluded must end with a `/` (e.g., `Web-Docs/`).

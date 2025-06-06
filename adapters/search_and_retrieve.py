@@ -30,7 +30,7 @@ def get_search_query() -> str:
     return search_query
 
 
-def process_query(search_query: str, verbose: bool = False) -> str:
+def process_query(search_query: str, verbose: bool = False) -> str | list:
     """
     Purpose: Process and sanitize the search query
     Inputs:
@@ -40,13 +40,18 @@ def process_query(search_query: str, verbose: bool = False) -> str:
         processed_query (str): The processed search query
     Role: Ensure search query is properly formatted for database search
     """
-    # Remove leading/trailing whitespace
-    processed_query = search_query.strip()
-    
-    if verbose:
-        log_event(f"[STEP] Processing search query: '{search_query}' -> '{processed_query}'", verbose)
-    
-    return processed_query
+    # Check for semicolon-separated multi-term search
+    if ';' in search_query:
+        terms = [term.strip() for term in search_query.split(';')]
+        processed_terms = [term for term in terms if term]
+        if verbose:
+            log_event(f"[STEP] Processing multi-term search query: '{search_query}' -> {processed_terms}", verbose)
+        return processed_terms
+    else:
+        processed_query = search_query.strip()
+        if verbose:
+            log_event(f"[STEP] Processing single-term search query: '{search_query}' -> '{processed_query}'", verbose)
+        return processed_query
 
 
 def display_results(results: list) -> None:
@@ -98,7 +103,7 @@ def display_results(results: list) -> None:
     print("\n" + "=" * 80)
 
 
-def save_results_to_csv(results: list, search_query: str, saved_searches_folder: Path, verbose: bool = False) -> None:
+def save_results_to_csv(results: list, search_query: str | list, saved_searches_folder: Path, verbose: bool = False) -> None:
     """
     Purpose: Save search results to a CSV file
     Inputs:
@@ -118,10 +123,12 @@ def save_results_to_csv(results: list, search_query: str, saved_searches_folder:
     
     # Format the filename with timestamp and search query
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    # Replace spaces and special characters in search query for filename
-    safe_query = search_query.replace(' ', '_').replace('/', '_').replace('\\', '_')
+    if isinstance(search_query, list):
+        safe_query = '_'.join(search_query)
+    else:
+        safe_query = search_query
+    safe_query = safe_query.replace(' ', '_').replace('/', '_').replace('\\', '_')
     safe_query = ''.join(c for c in safe_query if c.isalnum() or c == '_')
-    
     filename = f"{timestamp}_{safe_query}.csv"
     filepath = saved_searches_folder / filename
     
