@@ -110,7 +110,15 @@ EXCLUDED_FILES = {'.DS_Store', 'Thumbs.db', 'desktop.ini'}
 def scan_and_update_catalog(
     root: Path, extract_folder: str, catalog: pd.DataFrame, excluded_files: set = None, verbose: bool = False, tokenize: bool = False, convert: bool = False
 ) -> pd.DataFrame:
+    """
+    Purpose: Scan files, update catalog, and (when convert=True) convert .md and .pdf files to .txt if not already present.
+    Inputs: root (Path), extract_folder (str), catalog (DataFrame), excluded_files (set), verbose (bool), tokenize (bool), convert (bool)
+    Outputs: Updated catalog DataFrame
+    Role: Core catalog and conversion routine. When convert=True, ensures all .md and .pdf files are converted to .txt as needed.
+    """
     from core.log_utils import log_event
+    from ports.convertMDtoTXT import convert_md_to_txt
+    from core.extract_text import extract_and_save
     log_event("[START] scan_and_update_catalog", verbose)
 
     if excluded_files is None:
@@ -137,6 +145,11 @@ def scan_and_update_catalog(
         for f in files:
             abs_file_path = Path(dirpath) / f
             log_event(f"[SCAN] Considering file: {abs_file_path} (ext: {os.path.splitext(f)[1]})", verbose)
+            # Extra: log if .txt in any textracted folder
+            if os.path.splitext(f)[1].lower() == '.txt' and (
+                extract_folder in Path(dirpath).parts or Path(dirpath).name == extract_folder
+            ):
+                log_event(f"[DEBUG] Found TXT in textracted: {abs_file_path} (rel_dir={os.path.relpath(dirpath, root)})", verbose)
 
             if f in EXCLUDED_FILES:
                 log_event(f"File skipped (excluded): {abs_file_path}", verbose)
@@ -150,8 +163,42 @@ def scan_and_update_catalog(
             rel_dir = os.path.relpath(dirpath, root)
             extension = get_file_extension(f)
 
+            # --- Conversion logic: convert .md and .pdf to .txt if needed ---
+            if convert:
+                # For .md files: convert to .txt in same folder if not present
+                if extension.lower() == 'md':
+                    txt_path = Path(dirpath) / (name + '.txt')
+                    if not txt_path.exists():
+                        try:
+                            convert_md_to_txt(str(abs_file_path), verbose=verbose)
+                            log_event(f"[CONVERT] Converted MD to TXT: {abs_file_path} -> {txt_path}", verbose)
+                        except Exception as e:
+                            log_event(f"[ERROR] Failed to convert MD: {abs_file_path}: {e}", verbose)
+                # For .pdf files: extract text to extract_folder if not present
+                elif extension.lower() == 'pdf':
+                    # Place extracted .txt in extract_folder under the same top-level
+                    rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
+                    top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
+                    # Build textracted path: root/top_level/extract_folder/name.txt
+                    extract_dir = root / top_level / extract_folder
+                    extract_dir.mkdir(parents=True, exist_ok=True)
+                    txt_path = extract_dir / (name + '.txt')
+                    if not txt_path.exists():
+                        try:
+                            extract_and_save(abs_file_path, txt_path, verbose=verbose)
+                            log_event(f"[CONVERT] Extracted PDF to TXT: {abs_file_path} -> {txt_path}", verbose)
+                            # --- Update txt_mapping for immediate detection ---
+                            rel2 = os.path.relpath(extract_dir, root)
+                            parts2 = Path(rel2).parts if rel2 != '.' else ()
+                            mtop = parts2[0] if len(parts2) > 0 else '.'
+                            txt_mapping[(mtop, name)] = txt_path
+                        except Exception as e:
+                            log_event(f"[ERROR] Failed to extract PDF: {abs_file_path}: {e}", verbose)
+
             # --- NEW: Catalog .txt files in textracted folders ---
-            in_textracted = extract_folder in Path(dirpath).parts
+            in_textracted = (
+                extract_folder in Path(dirpath).parts or Path(dirpath).name == extract_folder
+            )
             try:
                 last_modified = os.path.getmtime(abs_file_path)
                 last_modified_str = pd.to_datetime(last_modified, unit='s').strftime('%Y-%m-%d %H:%M:%S')
@@ -162,10 +209,13 @@ def scan_and_update_catalog(
             # Calculate file_size_in_MB for all files by default
             file_size_in_MB = get_file_size_in_mb(abs_file_path)
 
-            # If .txt in textracted and associated with a PDF row-item, set blank
+            # Always catalog .txt files in any textracted folder (including root/textracted)
             if extension.lower() == 'txt' and in_textracted:
                 rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
-                top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
+                if rel_dir == extract_folder:
+                    top_level = extract_folder
+                else:
+                    top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
                 pdf_match = catalog[
                     (catalog['relative_path'].str.split(os.sep).str[0] == top_level)
                     & (catalog['filename'] == name)
@@ -173,6 +223,27 @@ def scan_and_update_catalog(
                 ]
                 if not pdf_match.empty:
                     file_size_in_MB = ''
+                # Always mark as textracted and ensure record is added
+                record = {
+                    'relative_path': rel_dir,
+                    'filename': name,
+                    'extension': extension,
+                    'last_modified': last_modified_str,
+                    'file_size_in_MB': file_size_in_MB,
+                    'textracted': True,
+                    'token_count': ''
+                }
+                if tokenize:
+                    log_event(f"[DEBUG] About to count tokens for TXT: {abs_file_path}", verbose)
+                    try:
+                        token_count = count_tokens(str(abs_file_path))
+                        record['token_count'] = token_count
+                    except Exception as e:
+                        record['token_count'] = ''
+                        log_event(f"[ERROR] Token counting failed for {abs_file_path}: {e}", verbose)
+                records.append(record)
+                log_event(f"[DEBUG] Appended TXT record: rel_path={record['relative_path']} filename={record['filename']} textracted={record['textracted']}", verbose)
+                continue  # Prevent duplicate record for same file
 
             record = {
                 'relative_path': rel_dir,
@@ -188,10 +259,15 @@ def scan_and_update_catalog(
             rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
             top_level = rel_parts[0] if len(rel_parts) > 0 else '.'
             if extension.lower() == 'pdf':
-                if (top_level, name) in txt_mapping:
+                # If PDF is in root, look for .txt in ('textracted', name)
+                if rel_dir == '.':
+                    key = ('textracted', name)
+                else:
+                    key = (top_level, name)
+                if key in txt_mapping:
                     record['textracted'] = True
                     if tokenize:
-                        txt_path = txt_mapping[(top_level, name)]
+                        txt_path = txt_mapping[key]
                         log_event(f"[DEBUG] Counting tokens for PDF-associated TXT: {txt_path}", verbose)
                         if txt_path.exists():
                             try:
@@ -283,19 +359,20 @@ from core.log_utils import log_event
 def run_catalog_workflow(profile_config: dict, verbose: bool = False, tokenize: bool = False, force_new: bool = False, convert: bool = False, backup_db: bool = False):
     """
     Purpose: Main entry for catalog management and extraction.
-    Inputs: profile_config (dict), verbose (bool), tokenize (bool), force_new (bool), convert (bool), backup_db (bool)
+    Inputs: profile_config (dict from user_inputs/folder_paths.json), verbose (bool), tokenize (bool), force_new (bool), convert (bool), backup_db (bool)
     Outputs: None
-    Role: Uses provided profile config, manages catalog, triggers extraction. All logging is handled via log_utils.py.
-    Tokenization is only performed if tokenize=True.
-    Text extraction and conversion only occur if convert=True.
-    If force_new is True, always create a new catalog from scratch.
-    If backup_db is True, create a backup of the SQLite database.
+    Role: All path variables are sourced from the active profile in user_inputs/folder_paths.json. No hardcoded defaults.
     """
-    # Process the profile config
+    from core.log_utils import set_log_path
+    # Extract all relevant paths from profile
     root = Path(profile_config['root_folder_path'])
-    catalog_folder = profile_config.get('catalog_folder', '_catalog')
-    extract_path = profile_config.get('extract_path', 'textracted')
+    catalog_folder = profile_config['catalog_folder']
+    extract_path = profile_config['extract_path']
+    buffer_folder = profile_config.get('buffer_folder', '')
+    yt_transcripts_folder = profile_config.get('yt_transcripts_folder', '')
     excluded_files = set(profile_config.get('excluded_files', []))
+    log_path = root / catalog_folder / 'logs.txt'
+    set_log_path(str(log_path))
     
     # Create config dict in the format expected by other functions
     config = {

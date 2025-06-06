@@ -11,6 +11,17 @@ from typing import Optional
 from pathlib import Path
 
 _log_file_initialized = {}
+_default_log_path = None
+
+def set_log_path(log_path: str):
+    """
+    Purpose: Set the default log file path for all log_event calls.
+    Inputs: log_path (str)
+    Outputs: None
+    Role: Allows dynamic control of log location (e.g., catalog_folder/logs.txt).
+    """
+    global _default_log_path
+    _default_log_path = log_path
 
 def log_event(msg: str, verbose: bool, log_path: Optional[str] = None) -> None:
     """
@@ -18,7 +29,7 @@ def log_event(msg: str, verbose: bool, log_path: Optional[str] = None) -> None:
     Inputs:
         msg: Message to log (str)
         verbose: Whether to log (bool)
-        log_path: Path to log file (Optional[str]); defaults to 'core/logs.txt'.
+        log_path: Path to log file (Optional[str]); defaults to _default_log_path or 'core/logs.txt'.
     Outputs:
         None
     Role: Called by catalog workflow to record process steps for audit/debugging.
@@ -26,7 +37,8 @@ def log_event(msg: str, verbose: bool, log_path: Optional[str] = None) -> None:
     """
     if not verbose:
         return
-    log_file = Path(log_path) if log_path else Path(__file__).parent / "logs.txt"
+    global _default_log_path
+    log_file = Path(log_path) if log_path else Path(_default_log_path) if _default_log_path else Path(__file__).parent / "logs.txt"
     log_file.parent.mkdir(parents=True, exist_ok=True)
     global _log_file_initialized
     key = str(log_file.resolve())

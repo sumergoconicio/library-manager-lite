@@ -120,7 +120,9 @@ def main():
         
         # Use concise output by default, detailed output if explicitly requested with --analysis
         use_concise = not (args.analysis and not force_run)
-        analyze_catalog(output_mode="print", verbose=args.verbose, concise=use_concise)
+        # Load profile-specific config
+        profile_config = load_profile_config(args=args)
+        analyze_catalog(output_mode="print", verbose=args.verbose, concise=use_concise, profile_config=profile_config)
 
     def handle_identify():
         from core.PDF_renamer import process_pdf_directory

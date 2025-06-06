@@ -31,28 +31,31 @@ def load_catalog_from_sqlite(db_path: Path, verbose: bool = False) -> pd.DataFra
         log_event(f"[ERROR] Failed to load from SQLite database: {e}", verbose)
         return None
 
-def analyze_catalog(output_mode="csv", verbose: bool = False, concise: bool = True):
+def analyze_catalog(output_mode="csv", verbose: bool = False, concise: bool = True, profile_config=None):
     """
     Purpose: Analyze catalog data from SQLite and output summary tables as separate CSV files.
     Inputs: 
         output_mode (str: 'print', 'return', or 'csv')
         verbose (bool): Enable verbose logging
+        concise (bool): Whether to show concise summary or detailed output
+        profile_config (dict): Profile-specific configuration dictionary
     Outputs: None or dict of tables
-    Role: Loads config, resolves catalog path, computes file/folder/ext/token stats with totals, counts textracted files, 
+    Role: Uses profile config, resolves catalog path, computes file/folder/ext/token stats with totals, counts textracted files, 
           writes separate CSV files for folder breakdown and extension breakdown.
     """
     log_event("[INFO] Starting catalog analysis", verbose)
-    config_path = Path("user_inputs/folder_paths.json")
-    if not config_path.exists():
-        log_event(f"[ERROR] Config file not found: {config_path}", verbose)
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-    with open(config_path) as f:
-        config = json.load(f)
-    root_folder = config.get("root_folder_path")
-    catalog_folder = config.get("catalog_folder", "_catalog")
+    
+    # Use provided profile config or load from file as fallback
+    if profile_config is None:
+        from ports.profile_loader import load_profile_config
+        profile_config = load_profile_config()
+        log_event(f"[INFO] Loaded profile config from file: {profile_config.get('_profile_name', 'unknown')}", verbose)
+    
+    root_folder = profile_config.get("root_folder_path")
+    catalog_folder = profile_config.get("catalog_folder", "_catalog")
     if not root_folder:
-        log_event("[ERROR] root_folder_path must be set in user_inputs/folder-paths.json", verbose)
-        raise ValueError("root_folder_path must be set in user_inputs/folder-paths.json")
+        log_event("[ERROR] root_folder_path must be set in the profile configuration", verbose)
+        raise ValueError("root_folder_path must be set in the profile configuration")
     
     # Define paths for catalog files
     sqlite_path = Path(root_folder) / catalog_folder / "library.sqlite"
@@ -241,5 +244,15 @@ if __name__ == "__main__":
     parser.add_argument("--output_mode", default="csv", help="Output mode: print, csv (default), or return")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--detailed", action="store_true", help="Show detailed output instead of concise summary")
+    
+    # Add profile selection argument
+    from ports.profile_loader import add_profile_arg
+    add_profile_arg(parser)
+    
     args = parser.parse_args()
-    analyze_catalog(output_mode=args.output_mode, verbose=args.verbose, concise=not args.detailed)
+    
+    # Load profile config
+    from ports.profile_loader import load_profile_config
+    profile_config = load_profile_config(args=args, verbose=args.verbose)
+    
+    analyze_catalog(output_mode=args.output_mode, verbose=args.verbose, concise=not args.detailed, profile_config=profile_config)

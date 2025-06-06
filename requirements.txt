@@ -10,7 +10,7 @@
 
 # Core dependencies
 pandas==2.2.2      # DataFrame/catalog handling
-litellm==1.27.6
+litellm==1.27.6     # for API calls to LLM providers
 PyMuPDF==1.22.5    # PDF processing
 yt-dlp==2023.11.16 # YouTube transcript downloading
 python-dotenv==1.0.0 # Environment variable loading
