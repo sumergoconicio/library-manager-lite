@@ -211,3 +211,66 @@ def run_search(profile_config: dict, search_terms: str, verbose: bool = False) -
                 print(filename)
             print()  # Blank line between folders
     return output_list
+
+
+# --- Interactive Search Workflow ---
+
+def interactive_search(args):
+    """
+    Purpose: End-to-end interactive search workflow triggered from main.py.
+    Inputs:
+        args (argparse.Namespace): Parsed CLI arguments providing verbosity flag and profile selection.
+    Outputs:
+        list: Search results returned by `run_search` (list of dicts with top_level_folder and filename).
+    Role: Handles user prompting, keyword extraction via `agents/query_processor.py`, loads profile configuration,
+          delegates database search to `run_search`, and returns the results. Keeps `main.py` lean by
+          encapsulating all search logic within the adapter layer.
+    """
+    # Local (lazy) imports to avoid unnecessary dependencies at module import time
+    import subprocess
+    import sys
+    from pathlib import Path
+    from ports.profile_loader import load_profile_config
+
+    # Prompt user for natural-language query
+    user_query = input("What topic are you researching today? ").strip()
+    if not user_query:
+        print("[ERROR] Search query cannot be empty.")
+        sys.exit(1)
+
+    if getattr(args, "verbose", False):
+        log_event(f"[DEBUG] User query: {user_query}", True)
+
+    # Derive keyword search terms using the LLM-powered query processor
+    project_root = Path(__file__).parent.parent
+    query_proc_path = project_root / "agents" / "query_processor.py"
+    if not query_proc_path.exists():
+        print(f"[ERROR] Query processor not found at {query_proc_path}")
+        sys.exit(1)
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(query_proc_path), user_query],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        search_terms = result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] Query processor failed: {e.stderr}")
+        sys.exit(1)
+
+    if getattr(args, "verbose", False):
+        log_event(f"[DEBUG] Extracted search keywords: {search_terms}", True)
+
+    if not search_terms:
+        print("[ERROR] No keywords extracted from your query. Please try a different search.")
+        sys.exit(1)
+
+    # Load profile-specific configuration
+    profile_config = load_profile_config(args=args)
+
+    # Delegate actual filename search to existing helper
+    results = run_search(profile_config, search_terms, verbose=getattr(args, "verbose", False))
+
+    return results
