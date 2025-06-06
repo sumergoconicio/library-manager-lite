@@ -67,6 +67,8 @@ def display_help(parser):
     print("  python main.py --convert --tokenize # Extract text and count tokens")
     print("  python main.py --identify           # Rename PDFs in buffer folder using LLM")
     print("  python main.py --transcribe         # Download transcripts from YouTube videos")
+    print("  python main.py --search             # Search for files by filename in the SQLite database")
+    print("  python main.py --help               # Display this help message and exit")
     print()
 
 def main():
@@ -153,10 +155,40 @@ def main():
 
     def handle_search():
         from adapters.search_and_retrieve import run_search
+        import subprocess
+        import sys
+        from pathlib import Path
+        # Prompt user for their research topic
+        user_query = input("What topic are you researching today? ").strip()
+        if not user_query:
+            print("[ERROR] Search query cannot be empty.")
+            sys.exit(1)
+        if args.verbose:
+            print(f"[DEBUG] User query: {user_query}")
         # Load profile-specific config
         profile_config = load_profile_config(args=args)
-        # Run the search functionality
-        run_search(profile_config, verbose=args.verbose)
+        # Call agents/query_processor.py as a subprocess to get keywords
+        query_proc_path = Path(__file__).parent / 'agents' / 'query_processor.py'
+        if not query_proc_path.exists():
+            print(f"[ERROR] Query processor not found at {query_proc_path}")
+            sys.exit(1)
+        try:
+            result = subprocess.run([sys.executable, str(query_proc_path), user_query], capture_output=True, text=True, check=True)
+            search_terms = result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] Query processor failed: {e.stderr}")
+            sys.exit(1)
+        if args.verbose:
+            print(f"[DEBUG] Extracted search keywords: {search_terms}")
+        if not search_terms:
+            print("[ERROR] No keywords extracted from your query. Please try a different search.")
+            sys.exit(1)
+        # Run the search functionality with extracted search_terms
+        results = run_search(profile_config, search_terms, verbose=args.verbose)
+        if args.verbose:
+            print("RETURNED TYPE:", type(results))
+            print("RETURNED VALUE:", results)
+
 
     def handle_incremental():
         # Load profile-specific config

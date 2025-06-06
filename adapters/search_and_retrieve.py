@@ -1,33 +1,21 @@
 """
 adapters/search_and_retrieve.py | Search Interface Adapter
-Purpose: Handle user interaction for search functionality and display results
+Purpose: Receives semicolon-separated search terms (from agents/query_processor.py), processes and logs query, calls core search, returns and saves results.
 Author: ChAI-Engine (chaiji)
 Last-Updated: 2025-06-06
 Non-Std Deps: pandas
-Abstract Spec: Prompts user for search query, processes input, calls core search function,
-              formats results for display to the user, and saves results to CSV in the saved_searches_folder.
+Abstract Spec: Accepts search terms as input, processes and logs query, calls core search, returns results, and saves CSV in saved_searches_folder.
 """
 
 import os
-import csv
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from core.sqlite_search import search_filenames
-from core.log_utils import log_event
+from core.log_utils import log_event, set_log_path
 
 
-def get_search_query() -> str:
-    """
-    Purpose: Prompt user for a search term
-    Inputs: None
-    Outputs: search_query (str): The user's search term
-    Role: User interaction for search functionality
-    """
-    print("\nLibrary Manager Search")
-    print("=====================")
-    search_query = input("Enter search term: ")
-    return search_query
+# get_search_query removed: user input is not part of new workflow
 
 
 def process_query(search_query: str, verbose: bool = False) -> str | list:
@@ -162,42 +150,64 @@ def save_results_to_csv(results: list, search_query: str | list, saved_searches_
         print(f"\nError saving search results: {e}")
 
 
-def run_search(profile_config: dict, verbose: bool = False) -> None:
+def run_search(profile_config: dict, search_terms: str, verbose: bool = False) -> list:
     """
-    Purpose: Main entry point for search functionality
+    Purpose: Main entry point for search functionality (no user prompt)
     Inputs:
         profile_config (dict): Configuration from the active profile
+        search_terms (str): Semicolon-separated search terms (from query_processor)
         verbose (bool): Enable verbose logging
-    Outputs: None
-    Role: Orchestrate the search workflow
+    Outputs: list of results (dicts with top_level_folder, filename)
+    Role: Process search_terms, log steps, call core search, return and save results
     """
-    # Get paths from profile config
     catalog_folder = Path(profile_config['catalog_folder'])
     log_path = catalog_folder / 'logs.txt'
-    
-    # Check if saved_searches_folder is defined in profile_config
-    if 'saved_searches_folder' not in profile_config:
-        log_event("[WARNING] saved_searches_folder not defined in profile config. Search results will not be saved.", verbose)
-        saved_searches_folder = None
-    else:
+    # Ensure default log path is set so downstream modules log to the correct file
+    set_log_path(str(log_path))
+
+    saved_searches_folder = None
+    if profile_config.get('saved_searches_folder'):
         saved_searches_folder = Path(profile_config['saved_searches_folder'])
-    
-    # Get search query from user
-    search_query = get_search_query()
-    
-    # Process the query
-    processed_query = process_query(search_query, verbose)
-    
-    # Log the search query if verbose
+
+    # Process the query (single or multi-term)
+    processed_query = process_query(search_terms, verbose)
+
+    # Log processing step and final query if verbose
     if verbose:
-        log_event(f"[INFO] Search query: '{processed_query}'", verbose)
-    
+        log_event(f"[STEP] Received search_terms: '{search_terms}'", verbose, log_path)
+        log_event(f"[STEP] Processed query: '{processed_query}'", verbose, log_path)
+
     # Search the database
     results = search_filenames(catalog_folder, processed_query, verbose)
-    
-    # Display results to the user
-    display_results(results)
-    
-    # Save results to CSV if saved_searches_folder is defined
+    # Prepare return: list of dicts with top_level_folder, filename
+    output_list = []
+    for idx, item in enumerate(results):
+        if 'relative_path' not in item:
+            continue
+        rel_path = item['relative_path']
+        parts = rel_path.split('/')
+        top_level = parts[0] if parts else "Root"
+        full_filename = f"{item.get('filename', '[missing]')}.{item.get('extension', '[missing]')}"
+        output_list.append({
+            'top_level_folder': top_level,
+            'filename': full_filename
+        })
+    # Sort output
+    output_list.sort(key=lambda x: (x['top_level_folder'], x['filename']))
+
+    # Save results to CSV if folder is configured
     if saved_searches_folder:
         save_results_to_csv(results, processed_query, saved_searches_folder, verbose)
+
+    # Clean, grouped display by top_level_folder
+    if output_list:
+        grouped = {}
+        for row in output_list:
+            folder = row['top_level_folder']
+            grouped.setdefault(folder, []).append(row['filename'])
+        for folder in sorted(grouped.keys()):
+            print(f"{folder}\n{'-' * 16}")
+            for filename in sorted(grouped[folder]):
+                print(filename)
+            print()  # Blank line between folders
+    return output_list
