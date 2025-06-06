@@ -1,4 +1,5 @@
 # requirements.txt
+# Sprint 32 — 2025-06-06: SQLite filename search feature (T63.1-T63.5). Added search functionality with CSV export.
 # Sprint 28 — 2025-06-06: Library profile selection system (T58.1-T58.5). Added multi-profile support for library configurations.
 # Sprint 27 — 2025-06-04: Enhanced catalog analysis (T57.1-T57.3). Added file size metrics with 3 decimal precision to folder-level analysis.
 # Sprint 24 — 2025-06-04: SQLite database integration (T54.1–T54.5). Added SQLite as complementary storage format alongside CSV.

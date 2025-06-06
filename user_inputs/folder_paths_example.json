@@ -11,6 +11,8 @@
         "excluded_files": [".DS_Store", "Thumbs.db"],
         "_buffer_folder_comment": "Optional: defaults to '~/Downloads' if not specified",
         "buffer_folder": "/path/to/buffer/folder",
+        "_saved_searches_folder_comment": "Optional: defaults to '' if not specified",
+        "saved_searches_folder": "/path/to/saved_searches/folder",
         "_yt_transcripts_folder_comment": "Optional: folder to store YouTube transcripts",
         "yt_transcripts_folder": "YTtranscripts"
     },
@@ -21,6 +23,7 @@
         "extract_path": "textracted",
         "excluded_files": [".DS_Store", "Thumbs.db"],
         "buffer_folder": "/path/to/test/buffer",
+        "saved_searches_folder": "/path/to/saved_searches/folder",    
         "yt_transcripts_folder": "test_transcripts"
     }
 }

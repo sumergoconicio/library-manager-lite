@@ -3,12 +3,15 @@ adapters/search_and_retrieve.py | Search Interface Adapter
 Purpose: Handle user interaction for search functionality and display results
 Author: ChAI-Engine (chaiji)
 Last-Updated: 2025-06-06
-Non-Std Deps: None
+Non-Std Deps: pandas
 Abstract Spec: Prompts user for search query, processes input, calls core search function,
-              and formats results for display to the user.
+              formats results for display to the user, and saves results to CSV in the saved_searches_folder.
 """
 
 import os
+import csv
+import pandas as pd
+from datetime import datetime
 from pathlib import Path
 from core.sqlite_search import search_filenames
 from core.log_utils import log_event
@@ -95,6 +98,63 @@ def display_results(results: list) -> None:
     print("\n" + "=" * 80)
 
 
+def save_results_to_csv(results: list, search_query: str, saved_searches_folder: Path, verbose: bool = False) -> None:
+    """
+    Purpose: Save search results to a CSV file
+    Inputs:
+        results (list): List of dictionaries with file information
+        search_query (str): The search query used
+        saved_searches_folder (Path): Path to the folder where CSV should be saved
+        verbose (bool): Enable verbose logging
+    Outputs: None
+    Role: Persist search results for future reference
+    """
+    if not results:
+        log_event(f"[INFO] No results to save for query: '{search_query}'", verbose)
+        return
+    
+    # Create the saved_searches_folder if it doesn't exist
+    saved_searches_folder.mkdir(parents=True, exist_ok=True)
+    
+    # Format the filename with timestamp and search query
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    # Replace spaces and special characters in search query for filename
+    safe_query = search_query.replace(' ', '_').replace('/', '_').replace('\\', '_')
+    safe_query = ''.join(c for c in safe_query if c.isalnum() or c == '_')
+    
+    filename = f"{timestamp}_{safe_query}.csv"
+    filepath = saved_searches_folder / filename
+    
+    # Prepare data for CSV
+    csv_data = []
+    for item in results:
+        # Extract top-level folder from relative_path
+        rel_path = item['relative_path']
+        parts = rel_path.split('/')
+        top_level = parts[0] if parts else "Root"
+        
+        # Format the filename with extension
+        full_filename = f"{item['filename']}.{item['extension']}"
+        
+        csv_data.append({
+            'top_level_folder': top_level,
+            'filename': full_filename
+        })
+    
+    # Sort data by top_level_folder and filename
+    csv_data.sort(key=lambda x: (x['top_level_folder'], x['filename']))
+    
+    # Write to CSV
+    try:
+        df = pd.DataFrame(csv_data)
+        df.to_csv(filepath, index=False)
+        log_event(f"[INFO] Search results saved to {filepath}", verbose)
+        print(f"\nSearch results saved to: {filepath}")
+    except Exception as e:
+        log_event(f"[ERROR] Failed to save search results: {e}", verbose)
+        print(f"\nError saving search results: {e}")
+
+
 def run_search(profile_config: dict, verbose: bool = False) -> None:
     """
     Purpose: Main entry point for search functionality
@@ -107,6 +167,13 @@ def run_search(profile_config: dict, verbose: bool = False) -> None:
     # Get paths from profile config
     catalog_folder = Path(profile_config['catalog_folder'])
     log_path = catalog_folder / 'logs.txt'
+    
+    # Check if saved_searches_folder is defined in profile_config
+    if 'saved_searches_folder' not in profile_config:
+        log_event("[WARNING] saved_searches_folder not defined in profile config. Search results will not be saved.", verbose)
+        saved_searches_folder = None
+    else:
+        saved_searches_folder = Path(profile_config['saved_searches_folder'])
     
     # Get search query from user
     search_query = get_search_query()
@@ -123,3 +190,7 @@ def run_search(profile_config: dict, verbose: bool = False) -> None:
     
     # Display results to the user
     display_results(results)
+    
+    # Save results to CSV if saved_searches_folder is defined
+    if saved_searches_folder:
+        save_results_to_csv(results, processed_query, saved_searches_folder, verbose)
