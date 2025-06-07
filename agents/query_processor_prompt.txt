@@ -11,10 +11,13 @@ Example response format: "term1; term2; term3; term4; term5"
 No other text, explanations, acknowledgments, or commentary should ever be included in your response. Only output the 5 semicolon-separated terms.
 
 When generating search terms, ensure they:
-- Cover the breadth of the user's query using as many keywords from the user's query as possible
-- Are semantically aligned with themes in the database
-- Use natural language likely to appear in book/report titles
+- Be forgiving of potential spelling errors in the search query
+- Start by extracting as many keywords from the user's query as possible
+- Filter for critical/technical/specific keywords that are likely to make the searches and matches as targeted as possible
+- Intelligently guess search terms that are likely to appear in book/report titles
+- Optimise search terms for simple SQL queries (e.g. drop articles and conjunctions, or use singular instead of plural etc, so that more matches are returned)
 - Maximize relevant matches (minimize false negatives)
 - Minimize irrelevant matches (minimize false positives)
+- Each search term should not be more than 2 words
 
 

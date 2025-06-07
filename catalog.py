@@ -9,6 +9,7 @@ Provides robust help system that can handle future flags.
 """
 
 from pathlib import Path
+import sys
 from dotenv import load_dotenv
 import argparse
 import json
@@ -40,7 +41,7 @@ def display_help(parser):
     
     print("\nLibrary Manager Lite - PDF Text Extraction and Cataloging System\n")
     print("USAGE:")
-    print("  python main.py [FLAGS]\n")
+    print("  python catalog.py [FLAGS]\n")
     print("FLAGS:")
     
     # Filter out the default help action
@@ -56,17 +57,17 @@ def display_help(parser):
         print(f"  {flag:<{max_flag_length}} {help_text}")
     
     print("\nEXAMPLES:")
-    print("  python main.py                      # Run incremental catalog update with analysis")
-    print("  python main.py --recatalog          # Force regenerate catalog from scratch with analysis")
-    print("  python main.py --no-analysis        # Run incremental update without analysis")
-    print("  python main.py --analysis           # Only analyze existing catalog (no updates)")
-    print("  python main.py --convert            # Extract text from PDFs and convert MD to TXT")
-    print("  python main.py --verbose --tokenize # Run with verbose logging and token counting")
-    print("  python main.py --convert --tokenize # Extract text and count tokens")
-    print("  python main.py --identify           # Rename PDFs in buffer folder using LLM")
-    print("  python main.py --transcribe         # Download transcripts from YouTube videos")
-    print("  python main.py --search             # Search for files by filename in the SQLite database")
-    print("  python main.py --help               # Display this help message and exit")
+    print("  python catalog.py                      # Run incremental catalog update with analysis")
+    print("  python catalog.py --recatalog          # Force regenerate catalog from scratch with analysis")
+    print("  python catalog.py --no-analysis        # Run incremental update without analysis")
+    print("  python catalog.py --analysis           # Only analyze existing catalog (no updates)")
+    print("  python catalog.py --convert            # Extract text from PDFs and convert MD to TXT")
+    print("  python catalog.py --verbose --tokenize # Run with verbose logging and token counting")
+    print("  python catalog.py --convert --tokenize # Extract text and count tokens")
+    print("  python catalog.py --identify           # Rename PDFs in buffer folder using LLM")
+    print("  python catalog.py --transcribe         # Download transcripts from YouTube videos")
+    print("  python catalog.py --search             # Search for files by filename in the SQLite database")
+    print("  python catalog.py --help               # Display this help message and exit")
     print()
 
 def main():

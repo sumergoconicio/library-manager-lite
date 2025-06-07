@@ -41,7 +41,11 @@ Designed for reproducibility, compliance, and ease of automation.
    - Edit `user_inputs/folder_paths.json` (see below)
 3. **Run the CLI:**
    ```bash
-   python main.py [flags]
+   python catalog.py [flags]
+   ```
+   or 
+   ```bash
+   python recommend.py
    ```
 
 ---
@@ -83,23 +87,25 @@ Designed for reproducibility, compliance, and ease of automation.
 ## Usage
 
 ### CLI Flags
-| Flag          | Description                                                                 |
-|---------------|-----------------------------------------------------------------------------|
-| --search      | Search filenames in the SQLite database; supports multi-term queries (semicolon-separated) |
-| --recatalog   | Full catalog rebuild (includes text conversion and tokenization)            |
-| --analysis    | Output summary analysis to latest-breakdown.txt                             |
-| --verbose     | Log every process iteration                                                 |
-| --tokenize    | Count tokens in TXT files and add to catalog                                |
-| --convert     | Convert PDFs to TXT, MD files to TXT, and VTT files to TXT                  |
-| --identify    | Rename PDFs in buffer_folder using LLM                                      |
-| --transcribe  | Download YouTube transcripts, convert VTT to TXT, update catalog            |
-| --backupdb    | Create timestamped backup of the SQLite database                            |
-| --profile     | Select library profile to use (from folder_paths.json)                      |
 
-- Only one main operation runs per invocation: `--identify`, `--recatalog`, `--analysis`, `--transcribe`, or (default) incremental update.
-- Modifier flags (`--convert`, `--tokenize`, `--verbose`) can be combined with any main operation.
-- If multiple main-operation flags are passed, the first matched in priority order is executed: `--identify` > `--transcribe` > `--recatalog` > `--analysis` > default.
-- Mutually exclusive flags are not enforced by argparse; avoid passing conflicting main-operation flags.
+| Flag          | Script(s)                | Description                                                                 |
+|---------------|--------------------------|-----------------------------------------------------------------------------|
+| --search      | catalog.py               | Search filenames in the SQLite database; supports multi-term queries (semicolon-separated). Only searches .txt files. |
+| --recatalog   | catalog.py               | Full catalog rebuild (includes text conversion and tokenization)            |
+| --analysis    | catalog.py               | Output summary analysis to latest-breakdown.txt                             |
+| --verbose     | catalog.py               | Log every process iteration                                                 |
+| --tokenize    | catalog.py               | Count tokens in TXT files and add to catalog                                |
+| --convert     | catalog.py               | Convert PDFs to TXT, MD files to TXT, and VTT files to TXT                  |
+| --identify    | catalog.py               | Rename PDFs in buffer_folder using LLM                                      |
+| --transcribe  | catalog.py               | Download YouTube transcripts, convert VTT to TXT, update catalog            |
+| --backupdb    | catalog.py               | Create timestamped backup of the SQLite database                            |
+| --profile     | catalog.py, recommend.py | Select library profile to use (from folder_paths.json)                      |
+
+
+- Only one catalog.py operation runs per invocation: `--identify`, `--recatalog`, `--analysis`, `--transcribe`, or (default) incremental update.
+- Modifier flags (`--convert`, `--tokenize`, `--verbose`) can be combined with any catalog.py operation.
+- If multiple catalog.py-operation flags are passed, the first matched in priority order is executed: `--identify` > `--transcribe` > `--recatalog` > `--analysis` > default.
+- Mutually exclusive flags are not enforced by argparse; avoid passing conflicting catalog.py-operation flags.
 
 ---
 
@@ -109,7 +115,7 @@ Designed for reproducibility, compliance, and ease of automation.
 - `latest-folder-breakdown.csv`: Folder-level analysis
 - `latest-extension-breakdown.csv`: Extension-type analysis
 - `logs.txt`: Process log (if verbose)
-- `SavedSearches/YYYYMMDDHHmmss_searchterm1_searchterm2.csv`: Search results export for multi-term queries (semicolon-separated, OR logic)
+- `SavedSearches/YYYYMMDDHHmmss_searchterm1_searchterm2.csv`: Search results export for multi-term queries (semicolon-separated, OR logic). Only .txt files are included in search results.
 
 **Catalog columns (strict order):**
 - Folders to be excluded must end with a `/` (e.g., `Web-Docs/`).
@@ -137,7 +143,7 @@ _Note: Column order is now strictly enforced as: relative_path, filename, extens
 The `--transcribe` flag enables downloading transcripts from YouTube videos and playlists:
 
 ```bash
-python main.py --transcribe
+python catalog.py --transcribe
 ```
 
 This will:

@@ -179,6 +179,8 @@ def run_search(profile_config: dict, search_terms: str, verbose: bool = False) -
 
     # Search the database
     results = search_filenames(catalog_folder, processed_query, verbose)
+    # Filter to only include .txt files
+    results = [item for item in results if item.get('extension', '').lower() == 'txt']
     # Prepare return: list of dicts with top_level_folder, filename
     output_list = []
     for idx, item in enumerate(results):
@@ -220,6 +222,7 @@ def interactive_search(args):
     Purpose: End-to-end interactive search workflow triggered from main.py.
     Inputs:
         args (argparse.Namespace): Parsed CLI arguments providing verbosity flag and profile selection.
+                                  May contain user_query attribute if provided externally.
     Outputs:
         list: Search results returned by `run_search` (list of dicts with top_level_folder and filename).
     Role: Handles user prompting, keyword extraction via `agents/query_processor.py`, loads profile configuration,
@@ -232,11 +235,15 @@ def interactive_search(args):
     from pathlib import Path
     from ports.profile_loader import load_profile_config
 
-    # Prompt user for natural-language query
-    user_query = input("What topic are you researching today? ").strip()
-    if not user_query:
-        print("[ERROR] Search query cannot be empty.")
-        sys.exit(1)
+    # Check if user query was provided externally (e.g., from book_recommender)
+    if hasattr(args, 'user_query') and args.user_query:
+        user_query = args.user_query
+    else:
+        # Prompt user for natural-language query
+        user_query = input("What topic are you researching today? ").strip()
+        if not user_query:
+            print("[ERROR] Search query cannot be empty.")
+            sys.exit(1)
 
     if getattr(args, "verbose", False):
         log_event(f"[DEBUG] User query: {user_query}", True)

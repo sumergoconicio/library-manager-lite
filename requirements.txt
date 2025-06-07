@@ -10,12 +10,12 @@
 # Python 3.10+ assumed.
 
 # Core dependencies
-pandas==2.2.2      # DataFrame/catalog handling and CSV export for search results
-litellm==1.27.6
-python-dotenv==1.0.1     # for API calls to LLM providers
+pandas==2.2.2==2.2.2      # DataFrame/catalog handling and CSV export for search results
+litellm==1.31.3==1.27.6
+python-dotenv==1.0.1==1.0.1     # for API calls to LLM providers
 PyMuPDF==1.22.5    # PDF processing
 yt-dlp==2023.11.16 # YouTube transcript downloading
-python-dotenv==1.0.0 # Environment variable loading
+python-dotenv==1.0.1==1.0.0 # Environment variable loading
 
 # Testing
 pytest==8.2.0      # Unit testing
