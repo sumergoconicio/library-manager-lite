@@ -81,90 +81,18 @@ pip install -r requirements.txt
 
 ### CLI Flags
 
-|
- Flag          
-|
- Script(s)         
-|
- Description                                                                 
-|
-|
----------------
-|
--------------------
-|
------------------------------------------------------------------------------
-|
-|
- --search      
-|
- catalog.py        
-|
- Search filenames in the SQLite database; supports multi-term queries (semicolon-separated). Only searches .txt files. 
-|
-|
- --recatalog   
-|
- catalog.py        
-|
- Full catalog rebuild (includes text conversion and tokenization)            
-|
-|
- --analysis    
-|
- catalog.py        
-|
- Output summary analysis to latest-breakdown.txt                             
-|
-|
- --verbose     
-|
- catalog.py        
-|
- Log every process iteration                                                 
-|
-|
- --tokenize    
-|
- catalog.py        
-|
- Count tokens in TXT files and add to catalog                                
-|
-|
- --convert     
-|
- catalog.py        
-|
- Convert PDFs to TXT, MD files to TXT, and VTT files to TXT                  
-|
-|
- --identify    
-|
- catalog.py        
-|
- Rename PDFs in buffer_folder using LLM                                      
-|
-|
- --transcribe  
-|
- catalog.py        
-|
- Download YouTube transcripts, convert VTT to TXT, update catalog            
-|
-|
- --backupdb    
-|
- catalog.py        
-|
- Create timestamped backup of the SQLite database                            
-|
-|
- --profile     
-|
- catalog.py, recommend.py 
-|
-
----
+| Flag         | Script(s)                | Description                                                                                 |
+|--------------|--------------------------|---------------------------------------------------------------------------------------------|
+| --search     | catalog.py               | Search filenames in the SQLite database; supports multi-term queries (semicolon-separated). Only searches .txt files. |
+| --recatalog  | catalog.py               | Full catalog rebuild (includes text conversion and tokenization)                            |
+| --analysis   | catalog.py               | Output summary analysis to latest-breakdown.txt                                             |
+| --verbose    | catalog.py               | Log every process iteration                                                                 |
+| --tokenize   | catalog.py               | Count tokens in TXT files and add to catalog                                                |
+| --convert    | catalog.py               | Convert PDFs to TXT, MD files to TXT, and VTT files to TXT                                  |
+| --identify   | catalog.py               | Rename PDFs in buffer_folder using LLM                                                      |
+| --transcribe | catalog.py               | Download YouTube transcripts, convert VTT to TXT, update catalog                            |
+| --backupdb   | catalog.py               | Create timestamped backup of the SQLite database                                            |
+| --profile    | catalog.py, recommend.py | Profile performance of scripts                                                              |
 
 ## Configuration
 
