@@ -10,6 +10,8 @@ Effortlessly manage, search, and analyze thousands of research documents—PDFs,
 - Manage 1,000s of documents (PDFs, images, txt, etc.)
 - Unified catalog in both CSV and SQLite formats
 - Rich analytics: file metadata, usage stats, and more
+- Add YouTube transcripts directly to your library (subtitles converted to TXT in desired folder)
+- Automatically convert PDFs to TXT, MD files to TXT, and VTT files to TXT
 
 ### 2. Agentic PDF Renaming
 - Automatically rename PDFs in your download folder
