@@ -1,0 +1,4 @@
+{
+    "_excluded_folders_comment": "Optional: defaults to [] if not specified",
+    "exclude": ["YTtranscripts", "Misc"]
+}

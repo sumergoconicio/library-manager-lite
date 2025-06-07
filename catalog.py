@@ -82,6 +82,7 @@ def main():
         --identify: Run PDF renaming workflow on buffer_folder
         --transcribe: Download transcripts from YouTube videos
         --search: Search for files by filename in the SQLite database
+        --find-duplicates: Find and save potential duplicate files to CSV
         --help: Display this help message and exit
     Outputs: None
     Role: Loads config, runs incremental or full catalog workflow per CLI flags, passes flags to modules. 
@@ -109,6 +110,7 @@ def main():
     parser.add_argument("--identify", action="store_true", help="Run PDF renaming workflow on buffer_folder")
     parser.add_argument("--transcribe", action="store_true", help="Download transcripts from YouTube videos")
     parser.add_argument("--search", action="store_true", help="Search for files by filename in the SQLite database")
+    parser.add_argument("--find-duplicates", action="store_true", help="Find and save potential duplicate files to CSV")
     parser.add_argument("--backupdb", action="store_true", help="Create a backup of the SQLite database in the catalog folder")
     parser.add_argument("--help", "-h", action="store_true", help="Display this help message and exit")
     # Add profile selection argument
@@ -122,6 +124,12 @@ def main():
     # If help flag is set, display help and exit
     if args.help:
         display_help(parser)
+        sys.exit(0)
+
+    if args.find_duplicates:
+        from core.duplicate_finder import find_and_save_duplicates
+        profile = getattr(args, 'profile', 'default')
+        find_and_save_duplicates(profile=profile)
         sys.exit(0)
 
     # Dispatch table for CLI actions

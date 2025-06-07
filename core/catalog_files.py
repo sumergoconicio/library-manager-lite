@@ -125,6 +125,19 @@ def scan_and_update_catalog(
         excluded_files = set()
     records = []
 
+    import hashlib
+
+    def _sha256_for_file(path):
+        try:
+            h = hashlib.sha256()
+            with open(path, 'rb') as f:
+                for chunk in iter(lambda: f.read(8192), b''):
+                    h.update(chunk)
+            return h.hexdigest()
+        except Exception as e:
+            log_event(f"[ERROR] SHA-256 failed for {path}: {e}", verbose)
+            return ''
+
     # --- Step 1: Build mapping of all .txt in any extract_folder folders ---
     txt_mapping = {}  # (top_level, basename) -> txt_path
     for dirpath, dirs, files in os.walk(root):
@@ -205,12 +218,13 @@ def scan_and_update_catalog(
             except Exception as e:
                 last_modified_str = ''
                 log_event(f"[ERROR] Could not get last_modified for {abs_file_path}: {e}", verbose)
-
             # Calculate file_size_in_MB for all files by default
             file_size_in_MB = get_file_size_in_mb(abs_file_path)
 
             # Always catalog .txt files in any extract_folder folder (including root/extract_folder)
-            if extension.lower() == 'txt' and in_textracted:
+            if extension.lower() == 'txt' and (
+                extract_folder in Path(dirpath).parts or Path(dirpath).name == extract_folder
+            ):
                 rel_parts = Path(rel_dir).parts if rel_dir != '.' else ()
                 if rel_dir == extract_folder:
                     top_level = extract_folder
@@ -228,10 +242,11 @@ def scan_and_update_catalog(
                     'relative_path': rel_dir,
                     'filename': name,
                     'extension': extension,
-                    'last_modified': last_modified_str,
+                    'last_modified': pd.to_datetime(os.path.getmtime(abs_file_path), unit='s').strftime('%Y-%m-%d %H:%M:%S'),
                     'file_size_in_MB': file_size_in_MB,
                     'textracted': True,
-                    'token_count': ''
+                    'token_count': '',
+                    'sha256': ''
                 }
                 if tokenize:
                     log_event(f"[DEBUG] About to count tokens for TXT: {abs_file_path}", verbose)
@@ -249,10 +264,11 @@ def scan_and_update_catalog(
                 'relative_path': rel_dir,
                 'filename': name,
                 'extension': extension,
-                'last_modified': last_modified_str,
+                'last_modified': pd.to_datetime(os.path.getmtime(abs_file_path), unit='s').strftime('%Y-%m-%d %H:%M:%S'),
                 'file_size_in_MB': file_size_in_MB,
                 'textracted': False,
-                'token_count': ''
+                'token_count': '',
+                'sha256': _sha256_for_file(abs_file_path)
             }
 
             # --- PDF logic: set textracted if mapping exists ---
@@ -294,7 +310,7 @@ def scan_and_update_catalog(
 
     # --- Step 3: Build DataFrame and ensure column order ---
     new_df = pd.DataFrame(records)
-    ordered_cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count']
+    ordered_cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count', 'sha256']
     for col in ordered_cols:
         if col not in new_df.columns:
             new_df[col] = ''
@@ -340,7 +356,7 @@ def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose
     catalog_dir.mkdir(parents=True, exist_ok=True)
     catalog_path = catalog_dir / 'latest-catalog.csv'
     # Ensure column order before saving
-    ordered_cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count']
+    ordered_cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count', 'sha256']
     for col in ordered_cols:
         if col not in catalog.columns:
             catalog[col] = ''

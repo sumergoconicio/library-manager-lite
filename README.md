@@ -1,5 +1,55 @@
 # Library Manager Lite
 
+## Overview
+Library Manager Lite catalogs your files, computes SHA-256 hashes, and finds duplicates using both fuzzy filename matching and exact content hashes. It supports profile-based configuration, folder exclusions, and outputs clean CSV reports for easy review.
+
+## Features
+- Catalogs files with metadata, size, and SHA-256 hash
+- Stores catalogs in CSV and SQLite formats
+- Detects duplicates by:
+  - Exact SHA-256 hash (content-based)
+  - Fuzzy filename and size (token_sort_ratio, Levenshtein)
+- Exclude folders from duplicate search via config
+- CLI-driven workflows with profile support
+
+## CLI Usage
+- Catalog files:
+  ```bash
+  python catalog.py --recatalog --profile <your_profile>
+  ```
+- Find duplicates:
+  ```bash
+  python catalog.py --find-duplicates --profile <your_profile>
+  ```
+- Exclude folders: Edit `user_inputs/duplicate_finder_exclusions.json`
+
+## Output
+- Catalog: `latest-catalog.csv` and `library.sqlite` (columns: relative_path, filename, extension, last_modified, file_size_in_MB, textracted, token_count, sha256)
+- Duplicates: `latest-duplicates.csv` (columns: top_level_folder, filename1, filename2, file_size_MB, confidence)
+
+## Requirements
+- Python 3.11+
+- pandas>=2.0.0
+- rapidfuzz>=3.0.0
+- sqlite3 (standard lib)
+
+## Example Workflow
+1. Configure your folders and profiles in `user_inputs/folder_paths.json`.
+2. Catalog your library:
+   ```bash
+   python catalog.py --recatalog --profile default
+   ```
+3. Find duplicates:
+   ```bash
+   python catalog.py --find-duplicates --profile default
+   ```
+4. Review results in your catalog folder.
+
+## Notes
+- SHA-256 hashes are skipped for textracted TXT files associated with PDFs.
+- Exclusion logic is fully dynamic via JSON config.
+- CLI flags and profiles allow flexible, multi-library management.
+
 **Bulk PDF Text Extraction & Cataloguing Tool**
 
 ---
