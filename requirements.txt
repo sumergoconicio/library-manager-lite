@@ -5,19 +5,22 @@
 # Sprint 24 — 2025-06-04: SQLite database integration (T54.1–T54.5). Added SQLite as complementary storage format alongside CSV.
 # Sprint 16 — 2025-06-04: Catalog enhancement cascade (T50.1–T50.5). Includes .txt in textracted, PDF–TXT mapping, tokenization, new columns, column order enforcement.
 # Sprint 8 — 2025-06-03: Added transcript archive functionality with CSV tracking.
+# Sprint 36 — 2025-06-07: SQLite-first cataloging, incremental updates, modular CLI, robust backup/tokenization, and audit trail.
 #
 # Pin all dependencies (standard and third-party) for reproducibility and audit.
 # Python 3.10+ assumed.
 
 # Core dependencies
-pandas>=2.0.0
-rapidfuzz>=3.0.0
-sqlite3
-litellm==1.31.3==1.27.6
-python-dotenv==1.0.1==1.0.1     # for API calls to LLM providers
-PyMuPDF==1.22.5    # PDF processing
-yt-dlp==2023.11.16 # YouTube transcript downloading
-python-dotenv==1.0.1==1.0.0 # Environment variable loading
+pandas==2.2.2           # DataFrame operations, CSV I/O
+rapidfuzz==3.6.2        # Fuzzy string matching for duplicate detection
+# sqlite3 is part of Python stdlib (no pip install required)
+tiktoken==0.5.2         # Token counting for .txt files
+PyMuPDF==1.22.5         # PDF text extraction
+python-dotenv==1.0.1    # Environment variable loading
+litellm==1.31.3         # LLM provider abstraction
+
+# CLI and workflow utilities
+yt-dlp==2023.11.16      # YouTube transcript downloading
 
 # Testing
-pytest==8.2.0      # Unit testing
+pytest==8.2.0           # Unit testing

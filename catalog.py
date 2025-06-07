@@ -1,8 +1,8 @@
 """
-main.py | Entry Point
+catalog.py | Entry Point
 Purpose: Orchestrate config loading, catalog processing, and catalog analysis for Library Manager.
 Author: ChAI-Engine (chaiji)
-Last-Updated: 2025-06-02
+Last-Updated: 2025-06-07
 Non-Std Deps: pandas, PyMuPDF (fitz)
 Abstract Spec: Loads config, runs catalog and extraction workflow, or analyzes catalog per CLI flag.
 Provides robust help system that can handle future flags.
@@ -13,15 +13,7 @@ import sys
 from dotenv import load_dotenv
 import argparse
 import json
-import litellm
 from ports.profile_loader import load_profile_config, add_profile_arg
-
-# Enable LiteLLM debug logging for troubleshooting provider/model issues
-#try:
-#    import litellm
-#    litellm._turn_on_debug()
-#except ImportError:
-#    pass
 
 from core.catalog_files import run_catalog_workflow
 from core.catalog_analyzer import analyze_catalog
@@ -64,8 +56,8 @@ def display_help(parser):
     print("  python catalog.py --convert            # Extract text from PDFs and convert MD to TXT")
     print("  python catalog.py --verbose --tokenize # Run with verbose logging and token counting")
     print("  python catalog.py --convert --tokenize # Extract text and count tokens")
-    print("  python catalog.py --identify           # Rename PDFs in buffer folder using LLM")
-    print("  python catalog.py --transcribe         # Download transcripts from YouTube videos")
+    print("  python identify.py                    # Rename PDFs in buffer folder using LLM")
+    print("  python transcribe.py                  # Download transcripts from YouTube videos")
     print("  python catalog.py --search             # Search for files by filename in the SQLite database")
     print("  python catalog.py --help               # Display this help message and exit")
     print()
@@ -74,22 +66,22 @@ def main():
     """
     Purpose: CLI entry point for Library Manager.
     Inputs:
-        --recatalog: Force regenerate catalog from scratch (full refresh). Automatically includes text conversion and tokenization.
-        --analysis: Run catalog analysis and output summary to latest-breakdown.txt
+        --recatalog: Force regenerate catalog from scratch (full refresh)
+        --analysis: Run catalog analysis and output summary
+        --no-analysis: Skip catalog analysis
         --verbose: Enable verbose logging to core/logs.txt
         --tokenize: Enable token-counting in catalog_files.py
         --convert: Convert MD files to TXT and extract text from PDFs
-        --identify: Run PDF renaming workflow on buffer_folder
-        --transcribe: Download transcripts from YouTube videos
         --search: Search for files by filename in the SQLite database
+        --backupdb: Backup the SQLite database before making changes
         --find-duplicates: Find and save potential duplicate files to CSV
+        --profile: Library profile to use (from folder_paths.json)
         --help: Display this help message and exit
     Outputs: None
     Role: Loads config, runs incremental or full catalog workflow per CLI flags, passes flags to modules. 
     By default, only new files are appended to the catalog (incremental update) and analysis is run afterward.
     Tokenization is always enabled for catalog operations.
     Text extraction and conversion are always enabled for catalog operations.
-    Provides enhanced help system that can handle future flags.
     """
     # Short-circuit recommend flag before parsing other flags to avoid unrecognized argument errors
     if "--recommend" in sys.argv:
@@ -101,17 +93,15 @@ def main():
         run([sys.executable, str(script)] + args_to_pass)
         sys.exit(0)
     parser = argparse.ArgumentParser(description="Library Manager Lite", add_help=False)
-    parser.add_argument("--recatalog", action="store_true", help="Force regenerate catalog from scratch (full refresh). Automatically includes text conversion and tokenization.")
-    parser.add_argument("--analysis", action="store_true", default=None, help="Run catalog analysis and output summary to latest-breakdown.txt")
-    parser.add_argument("--no-analysis", action="store_false", dest="analysis", help="Skip running catalog analysis (overrides default behavior)")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging to core/logs.txt")
+    parser.add_argument("--recatalog", action="store_true", help="Force regenerate catalog from scratch (full refresh)")
+    parser.add_argument("--analysis", action="store_const", const=True, default=None, help="Run catalog analysis and output summary")
+    parser.add_argument("--no-analysis", action="store_const", const=False, dest="analysis", help="Skip catalog analysis")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--tokenize", action="store_true", help="Enable token-counting in catalog_files.py")
     parser.add_argument("--convert", action="store_true", help="Convert MD files to TXT and extract text from PDFs")
-    parser.add_argument("--identify", action="store_true", help="Run PDF renaming workflow on buffer_folder")
-    parser.add_argument("--transcribe", action="store_true", help="Download transcripts from YouTube videos")
     parser.add_argument("--search", action="store_true", help="Search for files by filename in the SQLite database")
+    parser.add_argument("--backupdb", action="store_true", help="Backup the SQLite database before making changes")
     parser.add_argument("--find-duplicates", action="store_true", help="Find and save potential duplicate files to CSV")
-    parser.add_argument("--backupdb", action="store_true", help="Create a backup of the SQLite database in the catalog folder")
     parser.add_argument("--help", "-h", action="store_true", help="Display this help message and exit")
     # Add profile selection argument
     add_profile_arg(parser)
@@ -152,30 +142,8 @@ def main():
         profile_config = load_profile_config(args=args)
         analyze_catalog(output_mode="print", verbose=args.verbose, concise=use_concise, profile_config=profile_config)
 
-    def handle_identify():
-        from agents.PDF_renamer import process_pdf_directory
-        from adapters.llm_provider import get_llm_provider
-        # Load profile-specific config
-        profile_config = load_profile_config(args=args)
-        if "buffer_folder" not in profile_config:
-            raise KeyError(f"[ERROR] Required key 'buffer_folder' not found in selected profile")
-        buffer_folder = profile_config["buffer_folder"]
-        prompt = load_prompt("agents/PDF_renamer_prompt.txt")
-        # Use the workflow-specific LLM provider for identification
-        llm = get_llm_provider(workflow="identify")
-        process_pdf_directory(Path(buffer_folder), llm, prompt, n_pages=5, verbose=args.verbose)
-
-    def handle_transcribe():
-        from adapters.yt_transcriber import process_transcript_request
-        # Load profile-specific config
-        profile_config = load_profile_config(args=args)
-        if "yt_transcripts_folder" not in profile_config:
-            raise KeyError(f"[ERROR] Required key 'yt_transcripts_folder' not found in selected profile")
-        process_transcript_request(profile_config, verbose=args.verbose)
-        # Run incremental catalog update after transcription with tokenize=True
-        print("[INFO] Running incremental catalog update to include new transcript files...")
-        run_catalog_workflow(profile_config, verbose=args.verbose, tokenize=True, force_new=False, convert=False, backup_db=args.backupdb)
-        print("[INFO] Catalog update complete with token counting enabled.")
+    # Note: PDF identification functionality is now in identify.py
+    # Note: YouTube transcript functionality is now in transcribe.py
 
     def handle_search():
         from adapters.search_and_retrieve import interactive_search
@@ -195,21 +163,7 @@ def main():
 
     # Help flag already handled above
     # Dispatch logic
-    if args.identify:
-        try:
-            handle_identify()
-        except Exception as e:
-            print(str(e))
-            sys.exit(1)
-        sys.exit(0)
-    elif args.transcribe:
-        try:
-            handle_transcribe()
-        except Exception as e:
-            print(str(e))
-            sys.exit(1)
-        sys.exit(0)
-    elif args.search:
+    if args.search:
         try:
             handle_search()
         except Exception as e:

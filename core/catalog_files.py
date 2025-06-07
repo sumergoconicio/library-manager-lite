@@ -1,10 +1,10 @@
 """
 core/catalog_files.py | Catalog Management Module
-Purpose: Scan root folder for PDFs and all files, update catalog CSV, trigger extraction as needed, and ensure robust PDF–TXT association. Catalogs and tokenizes all .txt files in any extract_folder folder. For each PDF, sets textracted=True if a matching .txt exists in any extract_folder folder under the same top-level directory. Adds last_modified and file_size_in_MB columns to catalog, with file_size_in_MB skipped for extract_folder files associated with PDF row-items. File size extraction now uses a single robust utility get_file_size_in_mb for all cases. file_size_in_MB values are always rounded to 3 decimal places for precision and consistency.
+Purpose: Efficiently scan root folder for PDFs and all files, update and incrementally maintain catalog in SQLite (primary store), trigger extraction as needed, and ensure robust PDF–TXT association. Optionally generate CSV. SHA-256 is always tracked. Directory scanning is optimized for incremental updates.
 Author: ChAI-Engine (chaiji)
-Last-Updated: 2025-06-03
-Non-Std Deps: pandas, tiktoken
-Abstract Spec: Recursively scan root, catalog all files except system/excluded files. Build a mapping of (top-level, basename) to .txt path for all .txt in extract_folder folders. For PDFs, set textracted=True if a matching .txt exists in any extract_folder folders. Tokenize all .txt in extract_folder folders if tokenize flag is set. Ensure atomic, robust DataFrame updates. Docstrings and file header updated to reflect changes.
+Last-Updated: 2025-06-07
+Non-Std Deps: pandas, tiktoken, sqlite3
+Abstract Spec: Recursively scan root, catalog all files except system/excluded files. For each file, update or insert only if changed (by last_modified or sha256). Remove records for missing files. SQLite is the source of truth; CSV is optional. Always track sha256.
 """
 
 import os
@@ -77,6 +77,26 @@ def is_excluded(abs_file_path: Path, excluded: set, root: Path) -> bool:
 
 
 def load_or_init_catalog(root: Path, catalog_folder: str) -> pd.DataFrame:
+    """
+    Purpose: Load existing catalog from SQLite (preferred), or initialize new DataFrame if not found.
+    Inputs: root (Path), catalog_folder (str)
+    Outputs: catalog (pd.DataFrame)
+    Role: Ensures catalog is always available for update. SQLite is primary store.
+    """
+    import sqlite3
+    catalog_dir = catalog_folder
+    db_path = catalog_dir / 'library.sqlite'
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(str(db_path))
+            catalog = pd.read_sql("SELECT * FROM catalog", conn)
+            conn.close()
+            return catalog
+        except Exception as e:
+            print(f"[ERROR] Failed to load from SQLite: {e}")
+    # fallback to empty DataFrame
+    cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count', 'sha256']
+    return pd.DataFrame(columns=cols)
     """
     Purpose: Load existing catalog or initialize new DataFrame.
     Inputs: root (Path), catalog_folder (str)
@@ -320,12 +340,16 @@ def scan_and_update_catalog(
     #    print(f"[DEBUG] New catalog entries:\n{new_df.head()}")
 
     # --- Merge with old catalog, preferring new records ---
-    if not new_df.empty:
-        updated_catalog = pd.concat([catalog, new_df]).drop_duplicates(
+    dfs = [df for df in [catalog, new_df] if not df.empty]
+    if dfs:
+        updated_catalog = pd.concat(dfs).drop_duplicates(
             subset=['relative_path', 'filename', 'extension'], keep='last'
         ).reset_index(drop=True)
     else:
-        updated_catalog = catalog.copy()
+        # Both are empty
+        updated_catalog = pd.DataFrame(columns=[
+            'relative_path', 'filename', 'extension', 'last_modified',
+            'file_size_in_MB', 'textracted', 'token_count', 'sha256'])
 
     if verbose:
         print(f"[DEBUG] Updated catalog after merge:\n{updated_catalog.head()}")
@@ -345,7 +369,7 @@ def scan_and_update_catalog(
     return updated_catalog
 
 
-def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose: bool = False, backup_db: bool = False):
+def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose: bool = False, backup_db: bool = False, save_csv: bool = False, force_new: bool = False):
     """
     Purpose: Save catalog DataFrame to CSV and SQLite, ensuring required column order.
     Inputs: catalog (pd.DataFrame), root (Path), catalog_folder (str), verbose (bool), backup_db (bool)
@@ -354,25 +378,24 @@ def save_catalog(catalog: pd.DataFrame, root: Path, catalog_folder: str, verbose
     """
     catalog_dir = root / catalog_folder
     catalog_dir.mkdir(parents=True, exist_ok=True)
-    catalog_path = catalog_dir / 'latest-catalog.csv'
-    # Ensure column order before saving
     ordered_cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count', 'sha256']
     for col in ordered_cols:
         if col not in catalog.columns:
             catalog[col] = ''
     catalog = catalog[ordered_cols]
-    
-    # Save to CSV
-    catalog.to_csv(catalog_path, index=False)
-    log_event(f"Catalog updated at {catalog_path}", verbose)
-    
-    # Save to SQLite database
-    save_dataframe_to_sqlite(catalog, root, catalog_folder, verbose=verbose, backup_db=backup_db)
+    # Save to CSV only if requested
+    if save_csv:
+        catalog_path = catalog_dir / 'latest-catalog.csv'
+        catalog.to_csv(catalog_path, index=False)
+        log_event(f"Catalog updated at {catalog_path}", verbose)
+    # Always save to SQLite
+    from adapters.save_to_sqlite import save_dataframe_to_sqlite
+    save_dataframe_to_sqlite(catalog, root, catalog_folder, verbose=verbose, backup_db=backup_db, force_new=force_new)
 
 
 from core.log_utils import log_event
 
-def run_catalog_workflow(profile_config: dict, verbose: bool = False, tokenize: bool = False, force_new: bool = False, convert: bool = False, backup_db: bool = False):
+def run_catalog_workflow(profile_config: dict, verbose: bool = False, tokenize: bool = False, force_new: bool = False, convert: bool = False, backup_db: bool = False, save_csv: bool = False):
     """
     Purpose: Main entry for catalog management and extraction.
     Inputs: profile_config (dict from user_inputs/folder_paths.json), verbose (bool), tokenize (bool), force_new (bool), convert (bool), backup_db (bool)
@@ -402,13 +425,13 @@ def run_catalog_workflow(profile_config: dict, verbose: bool = False, tokenize: 
     catalog_path = catalog_dir / 'latest-catalog.csv'
     if force_new:
         # Always create a new empty DataFrame
-        cols = ['relative_path', 'filename', 'extension', 'textracted', 'token_count']
+        cols = ['relative_path', 'filename', 'extension', 'last_modified', 'file_size_in_MB', 'textracted', 'token_count', 'sha256']
         catalog = pd.DataFrame(columns=cols)
         log_event(f"[INFO] Creating new catalog from scratch at {catalog_path}", verbose)
     else:
         catalog = load_or_init_catalog(root, catalog_folder)
-        log_event(f"CSV found at {catalog_path}", verbose)
+        log_event(f"[INFO] Loaded catalog from SQLite or initialized new DataFrame", verbose)
     catalog = scan_and_update_catalog(
         root, extract_path, catalog, excluded_files, verbose=verbose, tokenize=tokenize, convert=convert
     )
-    save_catalog(catalog, root, catalog_folder, verbose=verbose, backup_db=backup_db)
+    save_catalog(catalog, root, catalog_folder, verbose=verbose, backup_db=backup_db, save_csv=save_csv, force_new=force_new)
