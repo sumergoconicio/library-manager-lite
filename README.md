@@ -15,6 +15,7 @@ Effortlessly manage, search, and analyze thousands of research documents—PDFs,
 - Automatically rename PDFs in your download folder
 - Best-guess extraction for `Author - Title (Year)`
 - Ensures clean, research-ready filenames before adding to your library
+- LiteLLM abstraction allows you to pick your preferred models and provide your own API keys
 
 ### 3. Multi-Library Profiles & Default Selection
 - Seamlessly manage multiple libraries using profiles
@@ -28,6 +29,7 @@ Effortlessly manage, search, and analyze thousands of research documents—PDFs,
 ### 5. Agentic Research Recommendations
 - Get smart, AI-driven suggestions for files relevant to your research
 - Surface hidden gems and key documents
+- LiteLLM abstraction allows you to pick your preferred models and provide your own API keys
 
 ### 6. Duplicate Detection
 - Find exact duplicates using SHA-256 hashing
@@ -53,28 +55,114 @@ pip install -r requirements.txt
 
 2. **Scan and catalog your documents:**
    ```bash
-   python main.py scan --profile research
+   python catalog.py --profile research
    ```
 
 3. **Auto-rename PDFs in your downloads folder:**
    ```bash
-   python main.py rename-downloads --downloads ~/Downloads --profile research
+   python catalog.py --identify --profile default
    ```
 
-4. **Search your library with SQL:**
+4. **Search your library with multiple keywords:**
    ```bash
-   python main.py search --query "SELECT * FROM catalog WHERE filename LIKE '%AI%'"
+   python catalog.py --search
    ```
 
 5. **Get agentic recommendations:**
    ```bash
-   python main.py recommend --topic "network science"
+   python recommend.py --profile sandbox
    ```
 
 6. **Find duplicates:**
    ```bash
-   python main.py find-duplicates --profile research
+   python catalog.py --find-duplicates --profile sandbox
    ```
+
+
+### CLI Flags
+
+|
+ Flag          
+|
+ Script(s)         
+|
+ Description                                                                 
+|
+|
+---------------
+|
+-------------------
+|
+-----------------------------------------------------------------------------
+|
+|
+ --search      
+|
+ catalog.py        
+|
+ Search filenames in the SQLite database; supports multi-term queries (semicolon-separated). Only searches .txt files. 
+|
+|
+ --recatalog   
+|
+ catalog.py        
+|
+ Full catalog rebuild (includes text conversion and tokenization)            
+|
+|
+ --analysis    
+|
+ catalog.py        
+|
+ Output summary analysis to latest-breakdown.txt                             
+|
+|
+ --verbose     
+|
+ catalog.py        
+|
+ Log every process iteration                                                 
+|
+|
+ --tokenize    
+|
+ catalog.py        
+|
+ Count tokens in TXT files and add to catalog                                
+|
+|
+ --convert     
+|
+ catalog.py        
+|
+ Convert PDFs to TXT, MD files to TXT, and VTT files to TXT                  
+|
+|
+ --identify    
+|
+ catalog.py        
+|
+ Rename PDFs in buffer_folder using LLM                                      
+|
+|
+ --transcribe  
+|
+ catalog.py        
+|
+ Download YouTube transcripts, convert VTT to TXT, update catalog            
+|
+|
+ --backupdb    
+|
+ catalog.py        
+|
+ Create timestamped backup of the SQLite database                            
+|
+|
+ --profile     
+|
+ catalog.py, recommend.py 
+|
 
 ---
 
